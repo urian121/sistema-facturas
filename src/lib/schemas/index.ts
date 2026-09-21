@@ -6,6 +6,7 @@ export {
   SCHEMAS,
   TIPOS,
   ETIQUETA_TIPO,
+  etiquetaTipo,
   FacturaSchema,
   ReciboSchema,
   ContratoSchema,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { buscarFragmentos, construirContexto, fuentesPorDocumento } from "@/lib/busqueda";
 import { embeber } from "@/lib/embeddings";
-import { CHAT_URL, MODELO, cabeceras, claveOpenRouter } from "@/lib/openrouter";
+import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 import { planificar } from "@/lib/planificador";
 import { documentosCitados, ejecutarConsulta, revisarConsulta } from "@/lib/sql-seguro";
 
@@ -55,7 +55,7 @@ async function redactar(
   historial: Turno[],
   contenido: string,
 ): Promise<Redaccion> {
-  const apiKey = claveOpenRouter()!;
+  const apiKey = claveOpenAI()!;
 
   const res = await fetch(CHAT_URL, {
     method: "POST",
@@ -63,9 +63,6 @@ async function redactar(
     body: JSON.stringify({
       model: MODELO,
       max_tokens: 2000,
-      // El modelo gastaba en razonar buena parte del presupuesto de tokens y la
-      // respuesta se cortaba a mitad de frase; para citar datos no hace falta.
-      reasoning: { enabled: false },
       messages: [
         { role: "system", content: system },
         ...historial,
@@ -80,7 +77,7 @@ async function redactar(
   if (!res.ok) {
     return {
       ok: false,
-      mensaje: `OpenRouter respondió ${res.status}: ${payload?.error?.message ?? res.statusText}`,
+      mensaje: `OpenAI respondió ${res.status}: ${payload?.error?.message ?? res.statusText}`,
       estado: res.status === 401 ? 401 : 502,
     };
   }
@@ -114,9 +111,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Escribe una pregunta" }, { status: 400 });
   }
 
-  if (!claveOpenRouter()) {
+  if (!claveOpenAI()) {
     return NextResponse.json(
-      { error: "Falta OPENROUTER_API_KEY en .env.local" },
+      { error: "Falta OPENAI_API_KEY en .env.local" },
       { status: 500 },
     );
   }

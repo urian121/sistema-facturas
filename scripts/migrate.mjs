@@ -1,10 +1,8 @@
 /**
  * Aplica db/init/*.sql en orden contra DATABASE_URL.
  *
- * En local lo hace el entrypoint de Docker la primera vez que se crea el
- * volumen; en producción no hay tal cosa, así que el arranque de la app pasa
- * por aquí. Todo el SQL es idempotente (IF NOT EXISTS), de modo que volver a
- * ejecutarlo en cada despliegue no rompe nada.
+ * Todo el SQL es idempotente (IF NOT EXISTS), de modo que volver a ejecutarlo
+ * en cada despliegue o arranque local no rompe nada.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -1,7 +1,7 @@
 "use client";
 
 import { IconoArchivo } from "./iconos";
-import { ETIQUETA_TIPO } from "@/lib/schemas";
+import { etiquetaTipo } from "@/lib/schemas";
 import type { Registro } from "@/lib/registros";
 
 function importe(total: string | null, moneda: string | null) {
@@ -74,9 +74,7 @@ export default function ListaRegistros({
                   seleccionado === r.document_id ? "bg-accent-soft" : ""
                 }`}
               >
-                <td className="px-3 py-2.5">
-                  {ETIQUETA_TIPO[r.tipo_documento as "otro"] ?? r.tipo_documento}
-                </td>
+                <td className="px-3 py-2.5">{etiquetaTipo(r.tipo_documento)}</td>
                 <td className="cifra px-3 py-2.5 text-ink-soft">{r.numero_documento ?? "—"}</td>
                 <td className="cifra px-3 py-2.5 text-ink-soft">{r.fecha_emision ?? "—"}</td>
                 <td className="max-w-[220px] truncate px-3 py-2.5">{r.emisor_nombre ?? "—"}</td>

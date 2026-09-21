@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { IconoLuna, IconoSol } from "./iconos";
 
-const EVENTO = "extracto:tema";
+const EVENTO = "tema";
 
 /** El tema vive en el documento, no en React: el script del layout lo fija antes del primer pintado. */
 function suscribir(alCambiar: () => void) {
@@ -22,7 +22,7 @@ export default function ConmutadorTema() {
     const siguiente = oscuro ? "light" : "dark";
     document.documentElement.dataset.theme = siguiente;
     try {
-      localStorage.setItem("extracto:tema", siguiente);
+      localStorage.setItem("tema", siguiente);
     } catch {
       // Modo privado o almacenamiento bloqueado: el tema dura la sesión.
     }

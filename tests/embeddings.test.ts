@@ -75,7 +75,7 @@ describe("embeber", () => {
   const vector = () => Array.from({ length: DIMENSIONES }, () => 0.01);
 
   beforeEach(() => {
-    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset();
   });
@@ -143,8 +143,8 @@ describe("embeber", () => {
   });
 
   it("avisa si falta la clave", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
 
-    await expect(embeber(["uno"])).rejects.toThrow(/OPENROUTER_API_KEY/);
+    await expect(embeber(["uno"])).rejects.toThrow(/OPENAI_API_KEY/);
   });
 });

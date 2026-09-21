@@ -74,7 +74,7 @@ function conExtraccion(datos: Extraccion) {
 }
 
 beforeEach(() => {
-  vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+  vi.stubEnv("OPENAI_API_KEY", "sk-test");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   query.mockReset();

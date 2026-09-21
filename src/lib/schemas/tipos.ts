@@ -136,3 +136,8 @@ export const ETIQUETA_TIPO: Record<TipoDocumento, string> = {
   contrato: "Contrato",
   otro: "Otro",
 };
+
+/** Igual que `ETIQUETA_TIPO` pero acepta el tipo tal cual llega de la base o de la API. */
+export function etiquetaTipo(tipo: string): string {
+  return ETIQUETA_TIPO[tipo as TipoDocumento] ?? tipo;
+}

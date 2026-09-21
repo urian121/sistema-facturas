@@ -1,5 +1,5 @@
 {
-  "name": "extracto",
+  "name": "gestor-de-facturas",
   "version": "0.2.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate": "node scripts/migrate.mjs"
+    "migrate": "node --env-file=.env.local scripts/migrate.mjs"
   },
   "dependencies": {
     "next": "16.3.4",

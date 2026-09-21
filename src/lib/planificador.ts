@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ESQUEMA, REGLAS_SQL } from "@/lib/esquema-sql";
-import { CHAT_URL, MODELO, cabeceras, claveOpenRouter } from "@/lib/openrouter";
+import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 
 export const PlanSchema = z.object({
   modo: z
@@ -37,8 +37,8 @@ const jsonSchema = z.toJSONSchema(PlanSchema);
 
 /** Decide el modo y, si toca, escribe la consulta. Una sola llamada al modelo. */
 export async function planificar(pregunta: string): Promise<Plan> {
-  const apiKey = claveOpenRouter();
-  if (!apiKey) throw new Error("Falta OPENROUTER_API_KEY en .env.local");
+  const apiKey = claveOpenAI();
+  if (!apiKey) throw new Error("Falta OPENAI_API_KEY en .env.local");
 
   const res = await fetch(CHAT_URL, {
     method: "POST",
@@ -46,12 +46,10 @@ export async function planificar(pregunta: string): Promise<Plan> {
     body: JSON.stringify({
       model: MODELO,
       max_tokens: 1000,
-      reasoning: { enabled: false },
       response_format: {
         type: "json_schema",
         json_schema: { name: "plan", strict: true, schema: jsonSchema },
       },
-      provider: { require_parameters: true },
       messages: [
         { role: "system", content: PROMPT },
         { role: "user", content: pregunta },
@@ -64,7 +62,7 @@ export async function planificar(pregunta: string): Promise<Plan> {
 
   if (!res.ok) {
     throw new Error(
-      `OpenRouter respondió ${res.status}: ${payload?.error?.message ?? res.statusText}`,
+      `OpenAI respondió ${res.status}: ${payload?.error?.message ?? res.statusText}`,
     );
   }
 

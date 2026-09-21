@@ -1,6 +1,4 @@
-import { CHAT_URL, MODELO, cabeceras, claveOpenRouter, PROVEEDORES } from "@/lib/openrouter";
-
-const PDF_ENGINE = process.env.OPENROUTER_PDF_ENGINE ?? "mistral-ocr";
+import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 
 const SYSTEM = `Transcribes documentos. Devuelves únicamente el texto visible del
 documento, literal y en orden de lectura, sin resumirlo, sin reordenarlo y sin añadir
@@ -19,7 +17,7 @@ export async function transcribir(doc: {
   mime_type: string;
   data: Buffer;
 }): Promise<string | null> {
-  const apiKey = claveOpenRouter();
+  const apiKey = claveOpenAI();
   if (!apiKey) return null;
 
   const dataUrl = `data:${doc.mime_type};base64,${doc.data.toString("base64")}`;
@@ -32,9 +30,6 @@ export async function transcribir(doc: {
       body: JSON.stringify({
         model: MODELO,
         max_tokens: 8000,
-        // Transcribir no requiere razonar: los tokens de razonamiento sólo alargan.
-        reasoning: { enabled: false },
-        provider: PROVEEDORES,
         messages: [
           { role: "system", content: SYSTEM },
           {
@@ -47,7 +42,6 @@ export async function transcribir(doc: {
             ],
           },
         ],
-        ...(esPdf ? { plugins: [{ id: "file-parser", pdf: { engine: PDF_ENGINE } }] } : {}),
       }),
       signal: AbortSignal.timeout(110_000),
     });

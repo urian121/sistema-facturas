@@ -215,7 +215,7 @@ export default function Uploader({
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
         <span className="font-marca text-[17px] font-semibold tracking-[-0.01em]">
-          Extracto
+          Gestor de Facturas
         </span>
         <span className="hidden text-[12px] text-label sm:inline">
           facturas, recibos y contratos revisados por ti

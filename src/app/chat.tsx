@@ -2,19 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { IconoAviso, IconoEnviar, IconoQuitar } from "./iconos";
-import { ETIQUETA_TIPO } from "@/lib/schemas";
+import { useEscapeKey } from "./use-escape-key";
+import { etiquetaTipo } from "@/lib/schemas";
+import type { FuenteCitada } from "@/lib/busqueda";
 
-export type Fuente = {
-  n: number;
-  document_id: string;
-  filename: string;
-  tipo_documento: string;
-  numero_documento: string | null;
-  fecha_emision: string | null;
-  emisor_nombre: string | null;
-  similitud?: number;
-  fragmento?: string;
-};
+export type Fuente = FuenteCitada;
 
 type Mensaje = {
   role: "user" | "assistant";
@@ -86,12 +78,7 @@ export default function Chat({
     if (abierto) campoRef.current?.focus();
   }, [abierto]);
 
-  useEffect(() => {
-    if (!abierto) return;
-    const escape = (e: KeyboardEvent) => e.key === "Escape" && onCerrar();
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [abierto, onCerrar]);
+  useEscapeKey(abierto, onCerrar);
 
   useEffect(() => {
     finalRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -219,7 +206,7 @@ export default function Chat({
                             title={f.fragmento}
                           >
                             <span className="font-medium text-accent">[{f.n}]</span>{" "}
-                            {ETIQUETA_TIPO[f.tipo_documento as "otro"] ?? f.tipo_documento}
+                            {etiquetaTipo(f.tipo_documento)}
                             {f.numero_documento ? ` ${f.numero_documento}` : ""}
                             {f.emisor_nombre ? ` · ${f.emisor_nombre}` : ""}
                             <span className="opacity-70"> · {f.filename}</span>

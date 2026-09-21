@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { IconoChevron, IconoConforme, IconoDocumento } from "./iconos";
-import { ETIQUETA_TIPO } from "@/lib/schemas";
+import { useEscapeKey } from "./use-escape-key";
+import { etiquetaTipo } from "@/lib/schemas";
 import type { Doc } from "./uploader";
 
 function formatSize(bytes: number) {
@@ -35,14 +36,11 @@ export default function SelectorDocumento({
     const fuera = (e: MouseEvent) => {
       if (!caja.current?.contains(e.target as Node)) setAbierto(false);
     };
-    const escape = (e: KeyboardEvent) => e.key === "Escape" && setAbierto(false);
     document.addEventListener("mousedown", fuera);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("mousedown", fuera);
-      document.removeEventListener("keydown", escape);
-    };
+    return () => document.removeEventListener("mousedown", fuera);
   }, [abierto]);
+
+  useEscapeKey(abierto, () => setAbierto(false));
 
   const otros = docs.length - 1;
 
@@ -96,7 +94,7 @@ export default function SelectorDocumento({
                   </span>
                   {doc.doc_type && (
                     <span className="shrink-0 text-[12px] text-label">
-                      {ETIQUETA_TIPO[doc.doc_type as "otro"] ?? doc.doc_type}
+                      {etiquetaTipo(doc.doc_type)}
                     </span>
                   )}
                   <span className="cifra shrink-0 text-[12px] text-label">

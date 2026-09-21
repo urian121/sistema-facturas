@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { IconoAviso, IconoQuitar, IconoSubir } from "./iconos";
+import { useEscapeKey } from "./use-escape-key";
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
 
@@ -18,11 +19,7 @@ export default function SubirModal({
   const [rechazo, setRechazo] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const escape = (e: KeyboardEvent) => e.key === "Escape" && !subiendo && onCerrar();
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [subiendo, onCerrar]);
+  useEscapeKey(!subiendo, onCerrar);
 
   /** El navegador deja soltar cualquier cosa: el filtro vive aquí, no en el accept. */
   const aceptar = (file: File | undefined) => {

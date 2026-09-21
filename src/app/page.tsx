@@ -20,7 +20,7 @@ export default async function Home() {
     registros = await listarRegistros();
   } catch {
     dbError =
-      "No hay conexión con PostgreSQL. ¿Levantaste la base con `docker compose up -d`?";
+      "No hay conexión con PostgreSQL. Revisa que esté en marcha y que DATABASE_URL sea correcta.";
   }
 
   return <Uploader initialDocs={docs} initialRegistros={registros} dbError={dbError} />;

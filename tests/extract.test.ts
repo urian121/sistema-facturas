@@ -24,12 +24,11 @@ function enBase(mime = "application/pdf") {
   };
 }
 
-/** Respuesta de OpenRouter con el contenido indicado. */
+/** Respuesta de OpenAI con el contenido indicado. */
 function respuestaModelo(contenido: string) {
   return new Response(
     JSON.stringify({
-      model: "deepseek/deepseek-v4.1-flash",
-      provider: "Fireworks",
+      model: "gpt-4.1-mini",
       choices: [{ message: { content: contenido }, finish_reason: "stop" }],
       usage: { total_tokens: 1399 },
     }),
@@ -40,7 +39,7 @@ function respuestaModelo(contenido: string) {
 const fetchMock = vi.fn();
 
 beforeEach(() => {
-  vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+  vi.stubEnv("OPENAI_API_KEY", "sk-test");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   query.mockReset();
@@ -83,20 +82,21 @@ describe("POST /api/extract", () => {
     expect(body.extraction.texto).toBeNull();
   });
 
-  it("manda el PDF como parte file con el plugin de OCR", async () => {
+  it("manda el PDF como parte file, con el archivo embebido en base64", async () => {
     fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
 
     await POST(peticion());
 
     const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
     const partes = enviado.messages[1].content;
+    const parteArchivo = partes.find((p: { type: string }) => p.type === "file");
 
-    expect(partes.some((p: { type: string }) => p.type === "file")).toBe(true);
-    expect(enviado.plugins).toEqual([{ id: "file-parser", pdf: { engine: "mistral-ocr" } }]);
+    expect(parteArchivo).toBeDefined();
+    expect(parteArchivo.file.file_data).toMatch(/^data:application\/pdf;base64,/);
     expect(enviado.response_format.json_schema.strict).toBe(true);
   });
 
-  it("manda las imágenes como image_url y sin plugin", async () => {
+  it("manda las imágenes como image_url", async () => {
     query.mockReset();
     query.mockResolvedValueOnce(enBase("image/png")).mockResolvedValue({ rowCount: 1, rows: [] });
     fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
@@ -105,7 +105,6 @@ describe("POST /api/extract", () => {
 
     const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(enviado.messages[1].content[1].type).toBe("image_url");
-    expect(enviado.plugins).toBeUndefined();
   });
 
   it("guarda un PDF incompleto y devuelve los campos que fallan", async () => {
@@ -156,7 +155,7 @@ describe("POST /api/extract", () => {
     expect((await res.json()).error).toMatch(/no cumple el esquema/);
   });
 
-  it("propaga un 401 de OpenRouter", async () => {
+  it("propaga un 401 de OpenAI", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "User not found" } }), { status: 401 }),
     );
@@ -181,30 +180,18 @@ describe("POST /api/extract", () => {
     expect((await POST(peticion(null))).status).toBe(400);
   });
 
-  it("avisa si falta la clave de OpenRouter", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+  it("avisa si falta la clave de OpenAI", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
 
     const res = await POST(peticion());
 
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toMatch(/OPENROUTER_API_KEY/);
+    expect((await res.json()).error).toMatch(/OPENAI_API_KEY/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe("robustez frente al proveedor", () => {
-  it("sólo acepta proveedores que respeten el esquema", async () => {
-    fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
-
-    await POST(peticion());
-
-    const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(enviado.provider.require_parameters).toBe(true);
-    // El orden antepone a los proveedores rápidos medidos sobre el mismo documento.
-    expect(enviado.provider.order[0]).toBe("venice");
-    expect(enviado.max_tokens).toBeGreaterThanOrEqual(8000);
-  });
-
+describe("robustez frente a respuestas vacías", () => {
   it("reintenta una vez si la respuesta viene vacía", async () => {
     fetchMock
       .mockResolvedValueOnce(respuestaModelo(""))
@@ -216,7 +203,7 @@ describe("robustez frente al proveedor", () => {
     expect(res.status).toBe(200);
   });
 
-  it("informa del proveedor si tampoco el reintento devuelve nada", async () => {
+  it("avisa si tampoco el reintento devuelve contenido", async () => {
     fetchMock.mockResolvedValue(respuestaModelo(""));
 
     const res = await POST(peticion());

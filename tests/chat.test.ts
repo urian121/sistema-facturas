@@ -69,7 +69,7 @@ function peticionDeChat() {
 }
 
 beforeEach(() => {
-  vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+  vi.stubEnv("OPENAI_API_KEY", "sk-test");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   query.mockReset();
@@ -188,7 +188,7 @@ describe("POST /api/chat", () => {
   });
 
   it("avisa si falta la clave", async () => {
-    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
 
     const res = await POST(peticion({ pregunta: "¿cuánto?" }));
 
@@ -231,11 +231,10 @@ describe("construirContexto", () => {
 });
 
 describe("presupuesto de tokens", () => {
-  it("no gasta tokens en razonar y deja margen para responder", async () => {
+  it("deja margen para responder", async () => {
     await POST(peticion({ pregunta: "¿cuánto?" }));
 
     const enviado = peticionDeChat();
-    expect(enviado.reasoning).toEqual({ enabled: false });
     expect(enviado.max_tokens).toBeGreaterThanOrEqual(2000);
   });
 

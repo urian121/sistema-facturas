@@ -2,14 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { pool } from "@/lib/db";
 import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
-import { CHAT_URL, MODELO, PROVEEDORES, cabeceras, claveOpenRouter } from "@/lib/openrouter";
+import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-// Motor con el que OpenRouter convierte los PDFs antes de pasarlos al modelo.
-// mistral-ocr lee también PDFs escaneados; pdf-text sólo extrae texto ya digital.
-const PDF_ENGINE = process.env.OPENROUTER_PDF_ENGINE ?? "mistral-ocr";
 
 const SYSTEM = `Eres un extractor de datos de documentos. Recibes la imagen o el PDF de un
 documento y devuelves únicamente sus datos estructurados en JSON.
@@ -41,10 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Falta el id del documento" }, { status: 400 });
   }
 
-  const apiKey = claveOpenRouter();
+  const apiKey = claveOpenAI();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Falta OPENROUTER_API_KEY en .env.local" },
+      { error: "Falta OPENAI_API_KEY en .env.local" },
       { status: 500 },
     );
   }
@@ -75,18 +71,11 @@ export async function POST(request: Request) {
       { role: "user", content: parts },
     ],
     max_tokens: 8000,
-    // Clasificar y copiar campos no requiere razonar; los tokens de razonamiento
-    // sólo alargaban la espera.
-    reasoning: { enabled: false },
-    // Structured outputs: el proveedor obliga al modelo a respetar el esquema.
+    // Structured outputs: el modelo está obligado a respetar el esquema.
     response_format: {
       type: "json_schema",
       json_schema: { name: "extraccion", strict: true, schema: jsonSchema },
     },
-    // Sin esto OpenRouter puede enrutar a un proveedor que ignore response_format
-    // y devuelva una respuesta vacía, o a uno que tarde veinte segundos de más.
-    provider: PROVEEDORES,
-    ...(isPdf ? { plugins: [{ id: "file-parser", pdf: { engine: PDF_ENGINE } }] } : {}),
   };
 
   // Arrow function: así TypeScript conserva que `apiKey` ya no es null.
@@ -102,7 +91,7 @@ export async function POST(request: Request) {
 
   let { res, payload } = await pedir();
 
-  // Una respuesta vacía suele ser cosa del proveedor que tocó: se reintenta una vez.
+  // Una respuesta vacía es rara pero pasa: se reintenta una vez.
   if (res.ok && !payload?.choices?.[0]?.message?.content) {
     ({ res, payload } = await pedir());
   }
@@ -110,7 +99,7 @@ export async function POST(request: Request) {
   if (!res.ok) {
     const detalle = payload?.error?.message ?? res.statusText;
     return NextResponse.json(
-      { error: `OpenRouter respondió ${res.status}: ${detalle}` },
+      { error: `OpenAI respondió ${res.status}: ${detalle}` },
       { status: res.status === 401 ? 401 : 502 },
     );
   }
@@ -120,7 +109,7 @@ export async function POST(request: Request) {
   if (!content) {
     return NextResponse.json(
       {
-        error: `El modelo (${payload?.provider ?? "proveedor desconocido"}) no devolvió contenido`,
+        error: "El modelo no devolvió contenido",
         finish_reason: eleccion?.finish_reason ?? null,
       },
       { status: 502 },

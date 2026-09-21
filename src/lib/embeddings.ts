@@ -1,9 +1,9 @@
-import { EMBEDDINGS_URL, cabeceras, claveOpenRouter } from "@/lib/openrouter";
+import { EMBEDDINGS_URL, cabeceras, claveOpenAI } from "@/lib/openai";
 import type { Extraccion } from "@/lib/schemas";
 
 /** 1536 dimensiones, las que declara la columna `vector(1536)`. */
 export const MODELO_EMBEDDINGS =
-  process.env.OPENROUTER_EMBEDDING_MODEL ?? "openai/text-embedding-3-small";
+  process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
 
 export const DIMENSIONES = 1536;
 
@@ -66,8 +66,8 @@ export function textoDeRespaldo(datos: Extraccion): string {
 export async function embeber(textos: string[]): Promise<number[][]> {
   if (textos.length === 0) return [];
 
-  const apiKey = claveOpenRouter();
-  if (!apiKey) throw new Error("Falta OPENROUTER_API_KEY en .env.local");
+  const apiKey = claveOpenAI();
+  if (!apiKey) throw new Error("Falta OPENAI_API_KEY en .env.local");
 
   const res = await fetch(EMBEDDINGS_URL, {
     method: "POST",

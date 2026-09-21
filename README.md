@@ -1,35 +1,31 @@
-# Extracto
+# Gestor de Facturas
 
-App de una sola página (Next.js) para subir imágenes o PDFs, verlos en una vista
-previa y extraer sus datos con un modelo de visión: clasifica el documento como
-**factura**, **recibo** o **contrato**, valida los campos con Zod y deja corregir a
-mano lo que esté mal, con el documento a la izquierda y el formulario a la derecha.
-Al confirmar, los datos pasan a tablas de PostgreSQL y el texto del documento se
-indexa como embeddings en **pgvector**; un chat responde preguntas sobre lo guardado
-citando el documento de origen, con SQL cuando la pregunta es de cálculo y con
-búsqueda semántica cuando va del contenido.
-
-Los archivos y el JSON extraído se guardan en PostgreSQL con la extensión
-**pgvector**, lista para añadir embeddings más adelante.
-
-**En producción:** https://extracto.seenode.app
+Sistema de gestión documental: subes una factura, un recibo o un contrato (imagen o
+PDF, incluso escaneado) y un modelo de visión lo lee, lo clasifica y extrae sus
+datos. Revisas y corriges lo que haga falta en un formulario con validación propia
+de cada tipo de documento (Zod), con el documento a la vista a un lado y el
+formulario al otro. Al confirmar, los datos pasan a tablas de PostgreSQL y el texto
+del documento se indexa como embeddings en **pgvector**. Un chat responde preguntas
+sobre lo archivado citando siempre el documento de origen: con SQL cuando la
+pregunta es de cálculo, con búsqueda semántica cuando va del contenido.
 
 ## Requisitos
 
 - Node.js 20+
-- Docker
+- PostgreSQL 16+ con la extensión `pgvector` instalada
+- Una clave de OpenAI (`OPENAI_API_KEY`)
 
 ## Puesta en marcha
 
 ```bash
-cp .env.example .env.local   # DATABASE_URL + OPENROUTER_API_KEY
-docker compose up -d         # PostgreSQL + pgvector en localhost:5435
+cp .env.local-example .env.local   # completa DATABASE_URL y OPENAI_API_KEY
 npm install
-npm run dev                  # http://localhost:3000
+npm run migrate                    # aplica db/init/*.sql contra DATABASE_URL
+npm run dev                        # http://localhost:3000
 ```
 
-El esquema (`db/init/01-schema.sql`) se aplica automáticamente la primera vez que
-se crea el volumen de la base de datos.
+El esquema (`db/init/*.sql`) es idempotente, así que `npm run migrate` se puede
+volver a ejecutar sin romper nada.
 
 ## Estructura
 
@@ -55,21 +51,19 @@ se crea el volumen de la base de datos.
 
 ## Extracción
 
-`POST /api/extract` manda el archivo a **OpenRouter** y fuerza la respuesta contra el
+`POST /api/extract` manda el archivo a **OpenAI** y fuerza la respuesta contra el
 esquema de `src/lib/extraction-schema.ts` (structured outputs, `strict: true`); el
 resultado se valida otra vez con Zod antes de guardarlo.
 
 | Variable | Por defecto | Para qué |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | — | Obligatoria |
-| `OPENROUTER_MODEL` | `deepseek/deepseek-v4.1-flash` | Modelo de visión |
-| `OPENROUTER_PDF_ENGINE` | `mistral-ocr` | Motor con el que OpenRouter convierte los PDFs (`mistral-ocr` lee escaneos; `native` y `cloudflare-ai` son las otras opciones) |
-| `OPENROUTER_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Debe dar 1536 dimensiones, las de la columna `vector(1536)` |
+| `OPENAI_API_KEY` | — | Obligatoria |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | Modelo de visión |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Debe dar 1536 dimensiones, las de la columna `vector(1536)` |
 
 Las imágenes viajan como `image_url` en base64; los PDFs como parte `file` con el
-plugin `file-parser`, así que también funcionan los PDFs escaneados. La petición lleva
-`provider: { require_parameters: true }` para que OpenRouter no la enrute a un
-proveedor que ignore el esquema y devuelva una respuesta vacía.
+archivo embebido en base64 (`file_data`), que OpenAI procesa de forma nativa,
+incluidos los escaneados.
 
 Campos extraídos: tipo de documento y confianza, emisor y receptor (nombre, NIF/CIF,
 dirección), número, fechas, moneda, subtotal/impuestos/total, método de pago, líneas
@@ -122,9 +116,9 @@ de este repositorio:
   que hacen falta para compilar.
 - **Arranque:** `node scripts/migrate.mjs && npx next start`. El script aplica
   `db/init/*.sql` (todo idempotente) y deja escrito en el log qué versión de pgvector
-  encontró; en local ese trabajo lo hace el entrypoint de Docker.
+  encontró; en local es el mismo script (`npm run migrate`) el que hace ese trabajo.
 - **Variables:** `DATABASE_URL` la inyecta Seenode al enlazar la base;
-  `OPENROUTER_API_KEY` va como secreto; `DATABASE_SSL=on` fuerza TLS, porque el
+  `OPENAI_API_KEY` va como secreto; `DATABASE_SSL=on` fuerza TLS, porque el
   Postgres gestionado rechaza las conexiones sin cifrar.
 
 La entrega continua (`autoDeploy`) está activada en la aplicación, pero sólo entra en
@@ -147,7 +141,7 @@ API con la base de datos y el modelo simulados: subida correcta de PDF e imagen,
 tipo no permitido, archivo ausente, exceso de 20 MB, extracción completa, extracción
 incompleta (se guarda y devuelve los campos que fallan), respuesta del modelo que no
 es JSON, que no cumple el esquema, que llega vacía (se reintenta) o que se corta por
-longitud, 401 de OpenRouter, documento inexistente, guardado de correcciones,
+longitud, 401 de OpenAI, documento inexistente, guardado de correcciones,
 troceado y embeddings, y la confirmación completa: transacción con cabecera, líneas,
 detalle de contrato y chunks, rechazo si hay campos inválidos, y ROLLBACK si algo
 falla a mitad. El chat tiene los suyos: respuesta con cita, fragmentos numerados en el
@@ -225,8 +219,9 @@ Tres decisiones que importan:
   en vez de improvisar sobre contexto vacío.
 - **Sólo documentos confirmados**: la consulta hace `JOIN` con `registros`, así que los
   borradores no contaminan las respuestas.
-- **Sin tokens de razonamiento** (`reasoning: { enabled: false }`): el modelo gastaba la
-  mitad del presupuesto razonando y la respuesta se cortaba a media frase.
+- **Modelo sin razonamiento** (`gpt-4.1-mini`): para citar datos no hace falta que el
+  modelo razone, y uno que sí lo hace se comería el presupuesto de tokens antes de
+  llegar a la respuesta.
 
 El historial se reenvía recortado a los seis últimos turnos, y se filtran los mensajes
 que no sean `user`/`assistant`.
@@ -241,7 +236,7 @@ que no sean `user`/`assistant`.
 | `registro_contratos` | Objeto, vigencia, ley aplicable y cláusulas |
 | `documento_chunks` | Fragmentos de texto y su `vector(1536)`, con índice HNSW |
 
-El esquema se aplica solo (`db/init/*.sql`) la primera vez que se crea el volumen.
+El esquema se aplica con `npm run migrate` (`db/init/*.sql`, idempotente).
 
 ## Límites
 

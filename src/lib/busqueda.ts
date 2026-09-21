@@ -13,6 +13,15 @@ export type Fragmento = {
   similitud: number;
 };
 
+/**
+ * Forma de cita que devuelven las rutas de chat: la del camino SQL no lleva
+ * `similitud` ni `fragmento` (no hay comparación semántica de por medio).
+ */
+export type FuenteCitada = Omit<Fragmento, "texto" | "similitud"> & {
+  similitud?: number;
+  fragmento?: string;
+};
+
 /** Por debajo de esto el fragmento no habla de lo que se pregunta. */
 export const SIMILITUD_MINIMA = 0.18;
 
@@ -68,7 +77,7 @@ export function construirContexto(fragmentos: Fragmento[]): string {
 /** Datos de cita de documentos concretos, para las respuestas calculadas con SQL. */
 export async function fuentesPorDocumento(
   documentIds: string[],
-): Promise<Omit<Fragmento, "texto" | "similitud">[]> {
+): Promise<FuenteCitada[]> {
   if (documentIds.length === 0) return [];
 
   const { rows } = await pool.query(
