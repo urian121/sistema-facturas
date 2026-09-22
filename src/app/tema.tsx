@@ -35,7 +35,7 @@ export default function ConmutadorTema() {
       onClick={cambiar}
       aria-label={oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
       title={oscuro ? "Tema claro" : "Tema oscuro"}
-      className="rounded-lg border border-line p-1.5 text-label transition hover:border-line-strong hover:bg-sunken hover:text-ink"
+      className="cursor-pointer rounded-lg border border-line p-1.5 text-label transition hover:border-line-strong hover:bg-sunken hover:text-ink"
     >
       {oscuro ? <IconoSol className="h-3.5 w-3.5" /> : <IconoLuna className="h-3.5 w-3.5" />}
     </button>

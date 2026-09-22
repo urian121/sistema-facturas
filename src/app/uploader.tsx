@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import Chat from "./chat";
 import DatosForm from "./datos-form";
 import ListaRegistros from "./lista-registros";
-import SelectorDocumento from "./selector-documento";
 import SubirModal from "./subir-modal";
 import ConmutadorTema from "./tema";
+import TiraDocumentos from "./tira-documentos";
 import {
   IconoArchivo,
   IconoAviso,
   IconoConforme,
+  IconoDocumento,
   IconoPregunta,
   IconoRecargar,
   IconoSubir,
@@ -209,16 +210,13 @@ export default function Uploader({
   }, [upload]);
 
   const botonBarra =
-    "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] transition";
+    "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] transition cursor-pointer";
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
         <span className="font-marca text-[17px] font-semibold tracking-[-0.01em]">
           Gestor de Facturas
-        </span>
-        <span className="hidden text-[12px] text-label sm:inline">
-          facturas, recibos y contratos revisados por ti
         </span>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -245,14 +243,6 @@ export default function Uploader({
           </button>
 
           <ConmutadorTema />
-
-          <button
-            onClick={() => setSubirAbierto(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition hover:opacity-90"
-          >
-            <IconoSubir className="h-3.5 w-3.5" />
-            Subir
-          </button>
         </div>
       </header>
 
@@ -276,6 +266,13 @@ export default function Uploader({
         </div>
       ) : (
         <>
+          <TiraDocumentos
+            docs={docs}
+            selectedId={selectedId}
+            archivados={archivados}
+            onElegir={abrirDocumento}
+          />
+
           {selected && (
             <div className="flex shrink-0 border-b border-line bg-surface lg:hidden">
               {(
@@ -310,12 +307,8 @@ export default function Uploader({
               {selected ? (
                 <>
                   <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-2.5 text-[13px]">
-                    <SelectorDocumento
-                      docs={docs}
-                      selected={selected}
-                      archivados={archivados}
-                      onElegir={abrirDocumento}
-                    />
+                    <IconoDocumento className="h-3.5 w-3.5 shrink-0 text-label" />
+                    <span className="min-w-0 flex-1 truncate">{selected.filename}</span>
                     <span className="cifra shrink-0 text-label">
                       {formatSize(Number(selected.size_bytes))}
                     </span>

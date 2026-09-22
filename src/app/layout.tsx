@@ -29,7 +29,13 @@ const TEMA_INICIAL = `try{var t=localStorage.getItem("tema");document.documentEl
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${inter.variable} ${signika.variable} h-full antialiased`}>
+    <html
+      lang="es"
+      className={`${inter.variable} ${signika.variable} h-full antialiased`}
+      // El script de abajo fija data-theme antes de hidratar; el mismatch es
+      // esperado y no afecta al resultado, solo hay que decírselo a React.
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: TEMA_INICIAL }} />
       </head>
