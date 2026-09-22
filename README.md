@@ -44,9 +44,12 @@ volver a ejecutar sin romper nada.
 | `src/lib/planificador.ts` | Decide SQL o embeddings y escribe la consulta |
 | `src/lib/sql-seguro.ts` | Revisa y ejecuta el SQL generado en modo sólo lectura |
 | `src/lib/embeddings.ts` | Troceado del texto y llamada a la API de embeddings |
+| `src/lib/oficina.ts` | Extrae texto de Word/Excel/PowerPoint (sin IA, ya está en el archivo) |
 | `src/lib/schemas/` | Esquemas Zod: forma laxa para el modelo y reglas por tipo |
 | `src/app/api/documents` | `GET` lista los últimos 50 archivos |
 | `src/app/api/files/[id]` | `GET` devuelve el binario para la vista previa |
+| `src/app/api/preview/[id]` | `GET` datos reales para la miniatura de Office (tabla o texto) |
+| `src/app/pdf-miniatura.tsx` | Miniatura de PDF con `pdfjs-dist`, renderizada en el navegador |
 | `src/lib/db.ts` | Pool de `pg` reutilizado entre recargas en desarrollo |
 
 ## Extracción
@@ -64,6 +67,29 @@ resultado se valida otra vez con Zod antes de guardarlo.
 Las imágenes viajan como `image_url` en base64; los PDFs como parte `file` con el
 archivo embebido en base64 (`file_data`), que OpenAI procesa de forma nativa,
 incluidos los escaneados.
+
+Word, Excel y PowerPoint (`.docx`, `.xlsx`, `.pptx`) van por un camino distinto:
+OpenAI no los lee nativamente, así que `src/lib/oficina.ts` extrae el texto en el
+servidor (`mammoth` para Word, `exceljs` para Excel, parseo del XML interno con
+`jszip` para PowerPoint) y ese texto —truncado a ~12&nbsp;000 caracteres— se manda
+como un mensaje de solo texto. El resto del flujo (esquema, validación, guardado)
+no cambia. El panel de documento no tiene forma de mostrarlos (no son ni imagen ni
+PDF), así que ofrece un enlace para abrirlos en pestaña nueva.
+
+### Miniaturas del historial
+
+Las tarjetas del historial (`src/app/historial-documentos.tsx`) sí muestran algo
+real del contenido, no solo un ícono:
+
+- **PDF**: la página 1 renderizada de verdad, con `pdfjs-dist` corriendo en el
+  navegador (`src/app/pdf-miniatura.tsx`) — sin ningún conversor en el servidor.
+  Solo se descarga y renderiza cuando la tarjeta entra en pantalla.
+- **Excel**: una mini tabla con las primeras filas/columnas reales de la primera
+  hoja. **Word y PowerPoint**: un fragmento del texto real. Ambos salen de
+  `GET /api/preview/{id}`, que reusa `src/lib/oficina.ts` con versiones más
+  cortas de la extracción (`previsualizarXlsx`, `previsualizarDocx`,
+  `previsualizarPptx`) — no es una foto de la página, pero es contenido real del
+  archivo, no un decorado.
 
 Campos extraídos: tipo de documento y confianza, emisor y receptor (nombre, NIF/CIF,
 dirección), número, fechas, moneda, subtotal/impuestos/total, método de pago, líneas
@@ -137,12 +163,15 @@ npm run test:watch
 ```
 
 `tests/` cubre los esquemas (cada tipo, fechas, cuadre, mensajes) y las tres rutas de
-API con la base de datos y el modelo simulados: subida correcta de PDF e imagen,
-tipo no permitido, archivo ausente, exceso de 20 MB, extracción completa, extracción
-incompleta (se guarda y devuelve los campos que fallan), respuesta del modelo que no
-es JSON, que no cumple el esquema, que llega vacía (se reintenta) o que se corta por
-longitud, 401 de OpenAI, documento inexistente, guardado de correcciones,
-troceado y embeddings, y la confirmación completa: transacción con cabecera, líneas,
+API con la base de datos y el modelo simulados: subida correcta de PDF, imagen y
+Office (Word/Excel/PowerPoint), tipo no permitido, archivo ausente, exceso de 20 MB,
+extracción completa, extracción incompleta (se guarda y devuelve los campos que
+fallan), respuesta del modelo que no es JSON, que no cumple el esquema, que llega
+vacía (se reintenta) o que se corta por longitud, 401 de OpenAI, documento
+inexistente, guardado de correcciones, troceado y embeddings, la extracción de texto
+de Office (`tests/oficina.test.ts`, con archivos generados en el propio test) y su
+error si el archivo no se puede leer, y la confirmación completa: transacción con
+cabecera, líneas,
 detalle de contrato y chunks, rechazo si hay campos inválidos, y ROLLBACK si algo
 falla a mitad. El chat tiene los suyos: respuesta con cita, fragmentos numerados en el
 prompt, fuentes filtradas a las citadas, umbral de similitud, base vacía, historial
@@ -240,4 +269,5 @@ El esquema se aplica con `npm run migrate` (`db/init/*.sql`, idempotente).
 
 ## Límites
 
-PNG, JPG, WebP, GIF y PDF, hasta 20 MB por archivo.
+PNG, JPG, WebP, GIF, PDF, Word (`.docx`), Excel (`.xlsx`) y PowerPoint (`.pptx`),
+hasta 20 MB por archivo.

@@ -1,4 +1,5 @@
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
+import { esOffice, extraerTextoOficina } from "@/lib/oficina";
 
 const SYSTEM = `Transcribes documentos. Devuelves únicamente el texto visible del
 documento, literal y en orden de lectura, sin resumirlo, sin reordenarlo y sin añadir
@@ -17,6 +18,16 @@ export async function transcribir(doc: {
   mime_type: string;
   data: Buffer;
 }): Promise<string | null> {
+  // El texto de un Word/Excel/PowerPoint ya está en el archivo, exacto: no
+  // hace falta pedirle a un modelo que lo "transcriba".
+  if (esOffice(doc.mime_type)) {
+    try {
+      return await extraerTextoOficina(doc.mime_type, doc.data);
+    } catch {
+      return null;
+    }
+  }
+
   const apiKey = claveOpenAI();
   if (!apiKey) return null;
 

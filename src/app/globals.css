@@ -1,33 +1,33 @@
 @import "tailwindcss";
 
 /*
- * Gestor de Facturas — estándar de la categoría, vara Stripe · Mercury · Ramp.
- * El claro es el modo de partida: los documentos que se revisan son blancos y
- * la escena es de día. El oscuro existe para quien trabaja de noche y se pide
- * con el conmutador o con el ajuste del sistema; no cambia el lenguaje, sólo
- * la luz: mismos filetes finos, mismo color con significado único.
+ * Gestor de Facturas — inspirado en Microsoft Teams / Fluent 2: púrpura de
+ * marca, grises neutros, Segoe UI. El claro es el modo de partida; el oscuro
+ * existe para quien trabaja de noche y se pide con el conmutador o con el
+ * ajuste del sistema — mismo lenguaje, sólo cambia la luz.
  */
 :root {
-  --app: #f7f8fa;
+  --app: #f5f5f5;
   --surface: #ffffff;
-  --sunken: #f1f3f6;
+  --sunken: #f0f0f0;
 
-  --ink: #0f172a;
-  --ink-soft: #475569;
-  --label: #64748b;
+  --ink: #242424;
+  --ink-soft: #424242;
+  --label: #616161;
 
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
+  --line: #e5e5e5;
+  --line-strong: #d1d1d1;
 
   /* Los tres colores con significado. Cada uno aparece poco y siempre quiere decir lo mismo. */
-  --accent: #4f46e5;
-  --accent-soft: #eef2ff;
-  --warn: #b45309;
-  --warn-soft: #fffbeb;
-  --ok: #047857;
-  --ok-soft: #ecfdf5;
-  --danger: #b91c1c;
-  --danger-soft: #fef2f2;
+  --accent: #5b5fc7;
+  --accent-soft: #dbdbff;
+  --accent-strong: #464775;
+  --warn: #9d5d00;
+  --warn-soft: #fff4ce;
+  --ok: #0e7a0d;
+  --ok-soft: #dff6dd;
+  --danger: #c4314b;
+  --danger-soft: #fde7eb;
 }
 
 @theme inline {
@@ -41,6 +41,7 @@
   --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-ok: var(--ok);
@@ -48,55 +49,61 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
-  --font-sans: var(--font-inter);
-  --font-marca: var(--font-signika);
+  /* Segoe UI no está en Google Fonts: se usa como fuente de sistema, igual
+     que hace el propio Teams web. Sin fuente de marca aparte: Teams solo
+     cambia el peso (semibold), no la familia. */
+  --font-sans: "Segoe UI", "Segoe UI Web (West European)", -apple-system,
+    BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+  --font-marca: var(--font-sans);
 }
 
 /* El sistema manda mientras nadie elija; el conmutador escribe data-theme. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --app: #0b0f17;
-    --surface: #111826;
-    --sunken: #0e1420;
+    --app: #1f1f1f;
+    --surface: #292929;
+    --sunken: #242424;
 
-    --ink: #e8edf5;
-    --ink-soft: #a9b4c6;
-    --label: #7e8a9e;
+    --ink: #f5f5f5;
+    --ink-soft: #c7c7c7;
+    --label: #9e9e9e;
 
-    --line: #1f2937;
-    --line-strong: #31405a;
+    --line: #3b3b3b;
+    --line-strong: #4d4d4d;
 
-    --accent: #8b93ff;
-    --accent-soft: #1c2140;
-    --warn: #f0b429;
-    --warn-soft: #2a2011;
-    --ok: #34d399;
-    --ok-soft: #0e2a22;
-    --danger: #f87171;
-    --danger-soft: #2a1414;
+    --accent: #8b8cc7;
+    --accent-soft: #33344f;
+    --accent-strong: #6467b0;
+    --warn: #ffb900;
+    --warn-soft: #433519;
+    --ok: #6ccb5f;
+    --ok-soft: #1f3320;
+    --danger: #f1707b;
+    --danger-soft: #442726;
   }
 }
 
 :root[data-theme="dark"] {
-  --app: #0b0f17;
-  --surface: #111826;
-  --sunken: #0e1420;
+  --app: #1f1f1f;
+  --surface: #292929;
+  --sunken: #242424;
 
-  --ink: #e8edf5;
-  --ink-soft: #a9b4c6;
-  --label: #7e8a9e;
+  --ink: #f5f5f5;
+  --ink-soft: #c7c7c7;
+  --label: #9e9e9e;
 
-  --line: #1f2937;
-  --line-strong: #31405a;
+  --line: #3b3b3b;
+  --line-strong: #4d4d4d;
 
-  --accent: #8b93ff;
-  --accent-soft: #1c2140;
-  --warn: #f0b429;
-  --warn-soft: #2a2011;
-  --ok: #34d399;
-  --ok-soft: #0e2a22;
-  --danger: #f87171;
-  --danger-soft: #2a1414;
+  --accent: #8b8cc7;
+  --accent-soft: #33344f;
+  --accent-strong: #6467b0;
+  --warn: #ffb900;
+  --warn-soft: #433519;
+  --ok: #6ccb5f;
+  --ok-soft: #1f3320;
+  --danger: #f1707b;
+  --danger-soft: #442726;
 }
 
 html {

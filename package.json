@@ -12,7 +12,12 @@
     "migrate": "node --env-file=.env.local scripts/migrate.mjs"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.12.3",
     "next": "16.3.4",
+    "nextjs-toast-notify": "^1.62.0",
+    "pdfjs-dist": "^6.3.289",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

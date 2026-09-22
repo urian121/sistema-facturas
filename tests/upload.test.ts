@@ -55,6 +55,20 @@ describe("POST /api/upload", () => {
     expect((await POST(peticion(form))).status).toBe(201);
   });
 
+  it("acepta Word, Excel y PowerPoint", async () => {
+    const tipos = [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ];
+
+    for (const tipo of tipos) {
+      const form = new FormData();
+      form.append("file", archivo("documento.ofc", tipo, 64));
+      expect((await POST(peticion(form))).status).toBe(201);
+    }
+  });
+
   it("rechaza la petición sin archivo", async () => {
     const res = await POST(peticion(new FormData()));
 

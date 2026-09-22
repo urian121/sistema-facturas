@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import ExcelJS from "exceljs";
 import { facturaValida } from "./factories";
+import { MIME_OFICINA } from "@/lib/mime-oficina";
 import type { Extraccion } from "@/lib/schemas";
 
 const query = vi.fn();
@@ -105,6 +107,44 @@ describe("POST /api/extract", () => {
 
     const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(enviado.messages[1].content[1].type).toBe("image_url");
+  });
+
+  it("manda un Excel como texto extraído, sin image_url ni file", async () => {
+    const libro = new ExcelJS.Workbook();
+    libro.addWorksheet("Facturas").addRow(["Café en grano 1 kg", 423.5]);
+    const data = Buffer.from(await libro.xlsx.writeBuffer());
+
+    query.mockReset();
+    query
+      .mockResolvedValueOnce({
+        rows: [{ filename: "gastos.xlsx", mime_type: MIME_OFICINA.xlsx, data }],
+      })
+      .mockResolvedValue({ rowCount: 1, rows: [] });
+    fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
+
+    const res = await POST(peticion());
+
+    expect(res.status).toBe(200);
+    const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const partes = enviado.messages[1].content;
+    expect(partes).toHaveLength(1);
+    expect(partes[0].type).toBe("text");
+    expect(partes[0].text).toContain("Café en grano 1 kg");
+  });
+
+  it("devuelve 502 si el Excel no se puede leer", async () => {
+    query.mockReset();
+    query.mockResolvedValueOnce({
+      rows: [
+        { filename: "roto.xlsx", mime_type: MIME_OFICINA.xlsx, data: Buffer.from("no es xlsx") },
+      ],
+    });
+
+    const res = await POST(peticion());
+
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toMatch(/No se pudo leer/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("guarda un PDF incompleto y devuelve los campos que fallan", async () => {

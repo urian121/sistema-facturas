@@ -45,7 +45,7 @@ export default function ListaRegistros({
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-        <table className="w-full min-w-[720px] text-left text-[13px]">
+        <table className="w-full min-w-180 text-left text-[13px]">
           <thead>
             <tr className="border-b border-line text-[11px] uppercase tracking-[0.06em] text-label">
               <th className="px-3 py-2 font-medium">Tipo</th>
@@ -77,7 +77,7 @@ export default function ListaRegistros({
                 <td className="px-3 py-2.5">{etiquetaTipo(r.tipo_documento)}</td>
                 <td className="cifra px-3 py-2.5 text-ink-soft">{r.numero_documento ?? "—"}</td>
                 <td className="cifra px-3 py-2.5 text-ink-soft">{r.fecha_emision ?? "—"}</td>
-                <td className="max-w-[220px] truncate px-3 py-2.5">{r.emisor_nombre ?? "—"}</td>
+                <td className="max-w-55 truncate px-3 py-2.5">{r.emisor_nombre ?? "—"}</td>
                 <td className="cifra px-3 py-2.5 text-right font-medium">
                   {importe(r.total, r.moneda)}
                 </td>

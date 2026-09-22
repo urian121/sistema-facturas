@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { IconoLuna, IconoSol } from "./iconos";
+import Tooltip from "./tooltip";
 
 const EVENTO = "tema";
 
@@ -14,7 +15,11 @@ function suscribir(alCambiar: () => void) {
 const leer = () => document.documentElement.dataset.theme ?? "light";
 const leerEnServidor = () => "light";
 
-export default function ConmutadorTema() {
+export default function ConmutadorTema({
+  posicion = "top",
+}: {
+  posicion?: "top" | "right";
+}) {
   const tema = useSyncExternalStore(suscribir, leer, leerEnServidor);
   const oscuro = tema === "dark";
 
@@ -30,14 +35,15 @@ export default function ConmutadorTema() {
   };
 
   return (
-    <button
-      type="button"
-      onClick={cambiar}
-      aria-label={oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-      title={oscuro ? "Tema claro" : "Tema oscuro"}
-      className="cursor-pointer rounded-lg border border-line p-1.5 text-label transition hover:border-line-strong hover:bg-sunken hover:text-ink"
-    >
-      {oscuro ? <IconoSol className="h-3.5 w-3.5" /> : <IconoLuna className="h-3.5 w-3.5" />}
-    </button>
+    <Tooltip etiqueta={oscuro ? "Tema claro" : "Tema oscuro"} posicion={posicion}>
+      <button
+        type="button"
+        onClick={cambiar}
+        aria-label={oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+        className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-ink-soft transition hover:bg-surface hover:text-ink"
+      >
+        {oscuro ? <IconoSol className="h-5 w-5" /> : <IconoLuna className="h-5 w-5" />}
+      </button>
+    </Tooltip>
   );
 }

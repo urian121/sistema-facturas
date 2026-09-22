@@ -3,19 +3,23 @@
 import { useCallback, useEffect, useState } from "react";
 import Chat from "./chat";
 import DatosForm from "./datos-form";
+import HistorialDocumentos from "./historial-documentos";
 import ListaRegistros from "./lista-registros";
+import { notificar } from "./notificar";
+import OficinaVistaPrevia from "./oficina-vista-previa";
+import Riel from "./riel";
 import SubirModal from "./subir-modal";
-import ConmutadorTema from "./tema";
-import TiraDocumentos from "./tira-documentos";
+import Tooltip from "./tooltip";
 import {
-  IconoArchivo,
   IconoAviso,
   IconoConforme,
+  IconoDestello,
   IconoDocumento,
-  IconoPregunta,
+  IconoPerfil,
   IconoRecargar,
   IconoSubir,
 } from "./iconos";
+import { esOffice } from "@/lib/mime-oficina";
 import type { Extraccion } from "@/lib/schemas";
 import type { Registro } from "@/lib/registros";
 
@@ -35,6 +39,36 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/**
+ * Zona vacía del panel de documento: mismo lenguaje visual que la zona de
+ * arrastrar-y-soltar del modal de subida (borde punteado, ícono, formatos
+ * aceptados), para que se reconozca de un vistazo como el mismo gesto. El
+ * fondo `bg-app` alrededor la separa del recuadro `bg-surface`, que si no
+ * quedaba fundido con el panel.
+ */
+function ZonaVacia({
+  titulo,
+  descripcion,
+  onClick,
+}: {
+  titulo: string;
+  descripcion: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center bg-app p-6">
+      <button
+        onClick={onClick}
+        className="flex w-full max-w-sm cursor-pointer flex-col items-center justify-center gap-2.5 rounded-lg border-2 border-dashed border-line bg-surface px-6 py-10 text-center transition hover:border-line-strong hover:bg-sunken"
+      >
+        <IconoSubir className="h-6 w-6 text-label" />
+        <span className="text-[14px] font-medium">{titulo}</span>
+        <span className="text-[12px] text-label">{descripcion}</span>
+      </button>
+    </div>
+  );
+}
+
 export default function Uploader({
   initialDocs,
   initialRegistros,
@@ -46,7 +80,8 @@ export default function Uploader({
 }) {
   const [docs, setDocs] = useState<Doc[]>(initialDocs);
   const [registros, setRegistros] = useState<Registro[]>(initialRegistros);
-  const [selectedId, setSelectedId] = useState<string | null>(initialDocs[0]?.id ?? null);
+  // Sin selección por defecto: el usuario elige del historial o sube algo nuevo.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [vista, setVista] = useState<"revisar" | "archivo">("revisar");
   // En móvil no caben documento e inspector a la vez: se conmuta entre ellos.
   const [panelMovil, setPanelMovil] = useState<"documento" | "datos">("documento");
@@ -57,8 +92,9 @@ export default function Uploader({
   const [analyzing, setAnalyzing] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(dbError);
+  // El resto de avisos son toasts; este es persistente porque explica por qué
+  // nada en la app funciona, así que no debe desaparecer solo.
+  const [dbErrorVisible, setDbErrorVisible] = useState(dbError !== null);
 
   const selected = docs.find((d) => d.id === selectedId) ?? null;
   const archivados = new Set(registros.map((r) => r.document_id));
@@ -74,8 +110,6 @@ export default function Uploader({
   }, []);
 
   const upload = useCallback(async (file: File) => {
-    setError(null);
-    setAviso(null);
     setUploading(true);
     setVista("revisar");
     try {
@@ -90,7 +124,7 @@ export default function Uploader({
       setPanelMovil("documento");
       setSubirAbierto(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
       setSubirAbierto(false);
     } finally {
       setUploading(false);
@@ -99,8 +133,6 @@ export default function Uploader({
 
   const analyze = useCallback(
     async (id: string) => {
-      setError(null);
-      setAviso(null);
       setAnalyzing(true);
       try {
         const res = await fetch("/api/extract", {
@@ -113,7 +145,7 @@ export default function Uploader({
         actualizar(id, { doc_type: data.doc_type, extraction: data.extraction });
         setPanelMovil("datos");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Error inesperado");
+        notificar.error(err instanceof Error ? err.message : "Error inesperado");
       } finally {
         setAnalyzing(false);
       }
@@ -134,14 +166,13 @@ export default function Uploader({
 
   const guardar = useCallback(async () => {
     if (!selected?.extraction) return;
-    setError(null);
     setGuardando(true);
     try {
       const data = await guardarBorrador(selected);
       actualizar(selected.id, { doc_type: data.extraction.tipo_documento });
-      setAviso("Borrador guardado");
+      notificar.ok("Borrador guardado");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
     } finally {
       setGuardando(false);
     }
@@ -149,8 +180,6 @@ export default function Uploader({
 
   const confirmar = useCallback(async () => {
     if (!selected?.extraction) return;
-    setError(null);
-    setAviso(null);
     setConfirmando(true);
     try {
       await guardarBorrador(selected);
@@ -164,13 +193,13 @@ export default function Uploader({
 
       actualizar(selected.id, { doc_type: selected.extraction.tipo_documento });
       await refrescarRegistros();
-      setAviso(
+      notificar.ok(
         `Archivado · ${data.lineas} ${data.lineas === 1 ? "línea" : "líneas"} y ${data.chunks} ${
           data.chunks === 1 ? "fragmento indexado" : "fragmentos indexados"
         }`,
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
     } finally {
       setConfirmando(false);
     }
@@ -180,7 +209,12 @@ export default function Uploader({
     setSelectedId(documentId);
     setVista("revisar");
     setPanelMovil("documento");
-    setAviso(null);
+  }, []);
+
+  const irAlInicio = useCallback(() => {
+    setSelectedId(null);
+    setVista("revisar");
+    setPanelMovil("documento");
   }, []);
 
   // Arrastrar sobre cualquier punto de la ventana: el objetivo es la aplicación entera.
@@ -209,48 +243,41 @@ export default function Uploader({
     };
   }, [upload]);
 
-  const botonBarra =
-    "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] transition cursor-pointer";
-
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
+    <div className="flex h-dvh flex-col overflow-hidden lg:flex-row">
+      <Riel
+        vista={vista}
+        onIrAlInicio={irAlInicio}
+        onCambiarVista={() => setVista(vista === "archivo" ? "revisar" : "archivo")}
+        onAbrirChat={() => setChatAbierto(true)}
+        onAbrirSubir={() => setSubirAbierto(true)}
+        contadorArchivo={registros.length}
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-14 lg:pb-0">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-sunken px-4">
         <span className="font-marca text-[17px] font-semibold tracking-[-0.01em]">
           Gestor de Facturas
         </span>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <button
-            onClick={() => setVista(vista === "archivo" ? "revisar" : "archivo")}
-            aria-pressed={vista === "archivo"}
-            className={`${botonBarra} ${
-              vista === "archivo"
-                ? "border-accent/40 bg-accent-soft text-accent"
-                : "border-line text-ink-soft hover:border-line-strong hover:bg-sunken"
-            }`}
+        <Tooltip etiqueta="Perfil" posicion="left" className="ml-auto">
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent transition hover:bg-surface"
+            aria-label="Perfil"
           >
-            <IconoArchivo className="h-3.5 w-3.5" />
-            Archivo
-            <span className="cifra text-label">{registros.length}</span>
-          </button>
-
-          <button
-            onClick={() => setChatAbierto(true)}
-            className={`${botonBarra} border-line text-ink-soft hover:border-line-strong hover:bg-sunken`}
-          >
-            <IconoPregunta className="h-3.5 w-3.5" />
-            Preguntar
-          </button>
-
-          <ConmutadorTema />
-        </div>
+            <IconoPerfil className="h-4 w-4" />
+          </div>
+        </Tooltip>
       </header>
 
-      {error && (
+      {dbError && dbErrorVisible && (
         <div className="flex shrink-0 items-start gap-2 border-b border-danger/25 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
           <IconoAviso className="mt-0.5 h-3.5 w-3.5" />
-          <p className="flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="underline-offset-2 hover:underline">
+          <p className="flex-1">{dbError}</p>
+          <button
+            onClick={() => setDbErrorVisible(false)}
+            className="cursor-pointer underline-offset-2 hover:underline"
+          >
             Descartar
           </button>
         </div>
@@ -266,28 +293,21 @@ export default function Uploader({
         </div>
       ) : (
         <>
-          <TiraDocumentos
-            docs={docs}
-            selectedId={selectedId}
-            archivados={archivados}
-            onElegir={abrirDocumento}
-          />
-
           {selected && (
             <div className="flex shrink-0 border-b border-line bg-surface lg:hidden">
               {(
                 [
                   ["documento", "Documento"],
-                  ["datos", "Datos extraídos"],
+                  ["datos", "Historial de Archivos"],
                 ] as const
               ).map(([clave, etiqueta]) => (
                 <button
                   key={clave}
                   onClick={() => setPanelMovil(clave)}
                   aria-current={panelMovil === clave}
-                  className={`flex-1 border-b-2 px-3 py-2 text-[13px] transition ${
+                  className={`flex-1 cursor-pointer border-b-2 px-3 py-2 text-[13px] transition ${
                     panelMovil === clave
-                      ? "border-accent text-accent"
+                      ? "border-accent bg-[#e5e6ff] text-accent"
                       : "border-transparent text-label hover:text-ink"
                   }`}
                 >
@@ -297,10 +317,10 @@ export default function Uploader({
             </div>
           )}
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[2fr_3fr]">
             {/* Documento */}
             <section
-              className={`min-h-0 flex-col border-b border-line lg:flex lg:border-b-0 lg:border-r ${
+              className={`relative min-h-0 min-w-0 flex-col border-b border-line lg:flex lg:border-b-0 lg:border-r ${
                 panelMovil === "documento" || !selected ? "flex" : "hidden"
               }`}
             >
@@ -333,58 +353,85 @@ export default function Uploader({
                           </a>
                         </p>
                       </object>
+                    ) : esOffice(selected.mime_type) ? (
+                      <OficinaVistaPrevia
+                        key={selected.id}
+                        docId={selected.id}
+                        filename={selected.filename}
+                      />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={`/api/files/${selected.id}`}
                         alt={selected.filename}
-                        className="mx-auto w-auto max-w-full rounded-lg border border-line bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
+                        className="mx-auto w-auto max-w-full rounded-lg"
                       />
                     )}
                   </div>
+
+                  {!selected.extraction && (
+                    <div className="absolute bottom-4 right-4 z-10">
+                      <button
+                        onClick={() => analyze(selected.id)}
+                        disabled={analyzing}
+                        className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-normal text-white shadow-[0_8px_24px_-8px_rgba(36,36,36,0.45)] transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <IconoDestello className="h-3.5 w-3.5" />
+                        {analyzing ? "Analizando…" : "Analizar documento"}
+                      </button>
+                    </div>
+                  )}
                 </>
-              ) : (
-                <button
+              ) : docs.length === 0 ? (
+                <ZonaVacia
+                  titulo="Arrastra el documento aquí o haz clic para elegirlo"
+                  descripcion="Factura, recibo o contrato · imagen, PDF, Word, Excel o PowerPoint · hasta 20 MB"
                   onClick={() => setSubirAbierto(true)}
-                  className="flex flex-1 flex-col items-center justify-center gap-3 bg-sunken p-8 text-center transition hover:bg-[color-mix(in_oklab,var(--sunken)_92%,var(--ink))]"
-                >
-                  <IconoSubir className="h-6 w-6 text-label" />
-                  <span className="text-[15px] font-medium">
-                    Sube tu primer documento
-                  </span>
-                  <span className="max-w-sm text-[13px] text-label">
-                    Una factura, un recibo o un contrato. Lo leo, lo clasifico y te dejo
-                    corregir lo que haga falta antes de archivarlo.
-                  </span>
-                </button>
+                />
+              ) : (
+                <ZonaVacia
+                  titulo="Elige un documento del historial o sube uno nuevo"
+                  descripcion="Arrastra el documento aquí o haz clic para subirlo"
+                  onClick={() => setSubirAbierto(true)}
+                />
               )}
             </section>
 
             {/* Datos */}
             <section
-              className={`min-h-0 flex-col bg-surface lg:flex ${
+              className={`min-h-0 min-w-0 flex-col bg-surface lg:flex ${
                 panelMovil === "datos" && selected ? "flex" : "hidden lg:flex"
               }`}
             >
               {!selected ? (
-                <p className="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-label">
-                  Los datos del documento aparecerán aquí para que los revises.
-                </p>
-              ) : !selected.extraction ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-                  <p className="max-w-xs text-[13px] leading-relaxed text-ink-soft">
-                    {analyzing
-                      ? "Leyendo el documento, clasificándolo y transcribiendo su texto. Tarda entre 10 y 20 segundos."
-                      : "Analiza el documento para extraer sus campos. Después podrás corregir lo que haga falta antes de archivarlo."}
+                docs.length === 0 ? (
+                  <p className="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-label">
+                    Los datos del documento aparecerán aquí para que los revises.
                   </p>
-                  <button
-                    onClick={() => analyze(selected.id)}
-                    disabled={analyzing}
-                    className="rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {analyzing ? "Analizando…" : "Analizar documento"}
-                  </button>
-                </div>
+                ) : (
+                  <HistorialDocumentos
+                    docs={docs}
+                    selectedId={selectedId}
+                    archivados={archivados}
+                    onElegir={abrirDocumento}
+                  />
+                )
+              ) : !selected.extraction ? (
+                analyzing ? (
+                  <div className="flex flex-1 items-center justify-center px-8 text-center">
+                    <p className="max-w-xs text-[13px] leading-relaxed text-ink-soft">
+                      Leyendo el documento, clasificándolo y transcribiendo su texto. Tarda
+                      entre 10 y 20 segundos.
+                    </p>
+                  </div>
+                ) : (
+                  <HistorialDocumentos
+                    docs={docs}
+                    selectedId={selectedId}
+                    archivados={archivados}
+                    onElegir={abrirDocumento}
+                  />
+                )
               ) : (
                 <div className="entra flex min-h-0 flex-1 flex-col">
                   <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
@@ -392,7 +439,7 @@ export default function Uploader({
                     <button
                       onClick={() => analyze(selected.id)}
                       disabled={analyzing}
-                      className="ml-auto flex items-center gap-1.5 text-[13px] text-label transition hover:text-ink disabled:opacity-50"
+                      className="ml-auto flex cursor-pointer items-center gap-1.5 text-[13px] text-label transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <IconoRecargar className="h-3.5 w-3.5" />
                       {analyzing ? "Analizando…" : "Volver a analizar"}
@@ -403,15 +450,11 @@ export default function Uploader({
                     key={selected.id}
                     extraccion={selected.extraction}
                     confirmado={confirmado}
-                    onChange={(siguiente) => {
-                      actualizar(selected.id, { extraction: siguiente });
-                      setAviso(null);
-                    }}
+                    onChange={(siguiente) => actualizar(selected.id, { extraction: siguiente })}
                     onGuardar={guardar}
                     onConfirmar={confirmar}
                     guardando={guardando}
                     confirmando={confirmando}
-                    aviso={aviso}
                   />
                 </div>
               )}
@@ -419,6 +462,7 @@ export default function Uploader({
           </div>
         </>
       )}
+      </div>
 
       <Chat
         abierto={chatAbierto}

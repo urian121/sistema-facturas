@@ -48,6 +48,14 @@ errores. Cada push a `master` despliega a producción (ver "Despliegue" en
   `tests/sql-seguro.test.ts`.
 - `.env.local` no está commiteado; usa `.env.local-example` como plantilla y no le
   añadas valores reales.
+- Tailwind v4 trae una escala de espaciado numérica amplia (`--spacing` × N, ej.
+  `max-w-110` = 440px, `mt-0.75` = 3px): antes de escribir un valor arbitrario
+  como `w-[440px]` o `mt-[3px]`, comprueba si existe la clase canónica
+  equivalente (÷4 el pixelaje) y úsala — el linter de Tailwind del editor los
+  marca como `suggestCanonicalClasses` si no. Los arbitrarios siguen siendo
+  válidos para colores/sombras/curvas que no están en la escala (ej.
+  `shadow-[0_8px_24px_-8px_rgba(...)]`), solo evita los de tamaño/espaciado
+  cuando hay canónico.
 
 ### Tests
 

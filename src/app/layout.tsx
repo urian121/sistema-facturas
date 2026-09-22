@@ -1,21 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Signika } from "next/font/google";
 import "./globals.css";
-
-// Workhorse de interfaz para etiquetas, campos y cifras.
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-// La marca, a la medida que dio el ranking del comp aprobado (cap 12,1px ≈ 17px).
-const signika = Signika({
-  variable: "--font-signika",
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Gestor de Facturas",
@@ -31,7 +15,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${signika.variable} h-full antialiased`}
+      className="h-full antialiased"
       // El script de abajo fija data-theme antes de hidratar; el mismatch es
       // esperado y no afecta al resultado, solo hay que decírselo a React.
       suppressHydrationWarning

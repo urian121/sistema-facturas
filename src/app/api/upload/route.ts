@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { MIME_OFICINA } from "@/lib/mime-oficina";
 
 export const runtime = "nodejs";
 
-const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"];
+const ALLOWED = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  ...Object.values(MIME_OFICINA),
+];
 const MAX_BYTES = 20 * 1024 * 1024;
 
 export async function POST(request: Request) {

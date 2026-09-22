@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { IconoAviso, IconoConforme, IconoMas, IconoQuitar } from "./iconos";
+import Tooltip from "./tooltip";
 import {
   ETIQUETA_TIPO,
   TIPOS,
@@ -43,7 +44,6 @@ export default function DatosForm({
   onConfirmar,
   guardando,
   confirmando,
-  aviso,
 }: {
   extraccion: Extraccion;
   confirmado: boolean;
@@ -52,7 +52,6 @@ export default function DatosForm({
   onConfirmar: () => void;
   guardando: boolean;
   confirmando: boolean;
-  aviso: string | null;
 }) {
   // Texto tal cual lo escribe el usuario en los campos numéricos, para no perder
   // lo tecleado mientras el valor todavía no es un número válido.
@@ -205,7 +204,7 @@ export default function DatosForm({
                     {campoEntrada(campo)}
                     {malos?.map((m) => (
                       <p key={m} className="mt-1 flex items-start gap-1 text-[12px] text-warn">
-                        <IconoAviso className="mt-[3px] h-3 w-3" />
+                        <IconoAviso className="mt-0.75 h-3 w-3" />
                         <span>{m}</span>
                       </p>
                     ))}
@@ -285,19 +284,21 @@ export default function DatosForm({
                       </div>
                     );
                   })}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      set(
-                        "lineas",
-                        extraccion.lineas.filter((_, j) => j !== i),
-                      )
-                    }
-                    aria-label={`Quitar línea ${i + 1}`}
-                    className="mt-1.5 text-label transition hover:text-danger"
-                  >
-                    <IconoQuitar className="h-3.5 w-3.5" />
-                  </button>
+                  <Tooltip etiqueta={`Quitar línea ${i + 1}`} posicion="top" className="mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        set(
+                          "lineas",
+                          extraccion.lineas.filter((_, j) => j !== i),
+                        )
+                      }
+                      aria-label={`Quitar línea ${i + 1}`}
+                      className="cursor-pointer text-label transition hover:text-danger"
+                    >
+                      <IconoQuitar className="h-3.5 w-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>
@@ -305,7 +306,7 @@ export default function DatosForm({
             <button
               type="button"
               onClick={() => set("lineas", [...extraccion.lineas, { ...LINEA_VACIA }])}
-              className="mt-2 flex items-center gap-1 text-[13px] text-accent transition hover:underline"
+              className="mt-2 flex cursor-pointer items-center gap-1 text-[13px] text-accent transition hover:underline"
             >
               <IconoMas className="h-3.5 w-3.5" />
               Añadir línea
@@ -353,12 +354,6 @@ export default function DatosForm({
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3">
-        {aviso && (
-          <span className="flex items-center gap-1.5 text-[13px] text-ok">
-            <IconoConforme className="h-3.5 w-3.5" />
-            {aviso}
-          </span>
-        )}
         {!valido && (
           <span className="text-[13px] text-label">
             Corrige los campos marcados para poder archivar.
@@ -370,7 +365,7 @@ export default function DatosForm({
             type="button"
             onClick={onGuardar}
             disabled={guardando || confirmando}
-            className="rounded-lg border border-line px-3 py-1.5 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken disabled:opacity-50"
+            className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar borrador"}
           </button>
@@ -379,7 +374,7 @@ export default function DatosForm({
             onClick={onConfirmar}
             disabled={confirmando || guardando || !valido}
             title={valido ? undefined : "Corrige los campos marcados"}
-            className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition hover:bg-[#4338ca] disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
           >
             {confirmando ? "Archivando…" : confirmado ? "Volver a archivar" : "Confirmar y archivar"}
           </button>

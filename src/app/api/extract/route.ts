@@ -3,12 +3,14 @@ import { z } from "zod";
 import { pool } from "@/lib/db";
 import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
+import { esOffice, extraerTextoOficina } from "@/lib/oficina";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const SYSTEM = `Eres un extractor de datos de documentos. Recibes la imagen o el PDF de un
-documento y devuelves únicamente sus datos estructurados en JSON.
+const SYSTEM = `Eres un extractor de datos de documentos. Recibes la imagen, el PDF, o el
+texto extraído de un documento Word/Excel/PowerPoint, y devuelves únicamente sus datos
+estructurados en JSON.
 
 - Clasifica el documento como factura, recibo, contrato u otro.
 - Copia los valores tal como aparecen; no inventes datos que no estén en el documento.
@@ -54,15 +56,34 @@ export async function POST(request: Request) {
   }
 
   const doc = rows[0] as { filename: string; mime_type: string; data: Buffer };
-  const dataUrl = `data:${doc.mime_type};base64,${doc.data.toString("base64")}`;
-  const isPdf = doc.mime_type === "application/pdf";
 
-  const parts: ContentPart[] = [
-    { type: "text", text: `Extrae los datos de este documento (archivo: ${doc.filename}).` },
-    isPdf
-      ? { type: "file", file: { filename: doc.filename, file_data: dataUrl } }
-      : { type: "image_url", image_url: { url: dataUrl } },
-  ];
+  let parts: ContentPart[];
+  if (esOffice(doc.mime_type)) {
+    let texto: string;
+    try {
+      texto = await extraerTextoOficina(doc.mime_type, doc.data);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "No se pudo leer el archivo" },
+        { status: 502 },
+      );
+    }
+    parts = [
+      {
+        type: "text",
+        text: `Extrae los datos de este documento (archivo: ${doc.filename}).\n\nContenido:\n${texto}`,
+      },
+    ];
+  } else {
+    const dataUrl = `data:${doc.mime_type};base64,${doc.data.toString("base64")}`;
+    const isPdf = doc.mime_type === "application/pdf";
+    parts = [
+      { type: "text", text: `Extrae los datos de este documento (archivo: ${doc.filename}).` },
+      isPdf
+        ? { type: "file", file: { filename: doc.filename, file_data: dataUrl } }
+        : { type: "image_url", image_url: { url: dataUrl } },
+    ];
+  }
 
   const body = {
     model: MODELO,
