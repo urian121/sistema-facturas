@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
-import { facturaValida } from "./factories";
+import { EMAIL_PRUEBA, facturaValida } from "./factories";
 import { MIME_OFICINA } from "@/lib/mime-oficina";
 import type { Extraccion } from "@/lib/schemas";
 
 const query = vi.fn();
 vi.mock("@/lib/db", () => ({ pool: { query } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
 const { POST } = await import("@/app/api/extract/route");
 
@@ -30,7 +31,7 @@ function enBase(mime = "application/pdf") {
 function respuestaModelo(contenido: string) {
   return new Response(
     JSON.stringify({
-      model: "gpt-4.1-mini",
+      model: "gpt-5.6-luna",
       choices: [{ message: { content: contenido }, finish_reason: "stop" }],
       usage: { total_tokens: 1399 },
     }),

@@ -37,18 +37,22 @@ const CONSULTA = `
     FROM documento_chunks c
     JOIN documents d ON d.id = c.document_id
     JOIN registros r ON r.document_id = c.document_id
+   WHERE d.usuario_email = $3
+     AND d.eliminado_at IS NULL
    ORDER BY c.embedding <=> $1
    LIMIT $2`;
 
 /**
  * Fragmentos más parecidos a la consulta, ya numerados para citarlos.
- * Sólo mira documentos confirmados: el JOIN con `registros` los deja fuera.
+ * Sólo mira documentos confirmados del usuario dado: el JOIN con `registros`
+ * y el filtro por dueño dejan fuera el resto.
  */
 export async function buscarFragmentos(
   embeddingConsulta: number[],
+  usuarioEmail: string,
   limite = 6,
 ): Promise<Fragmento[]> {
-  const { rows } = await pool.query(CONSULTA, [aVector(embeddingConsulta), limite]);
+  const { rows } = await pool.query(CONSULTA, [aVector(embeddingConsulta), limite, usuarioEmail]);
 
   return (rows as Omit<Fragmento, "n">[])
     .filter((fila) => Number(fila.similitud) >= SIMILITUD_MINIMA)
@@ -77,6 +81,7 @@ export function construirContexto(fragmentos: Fragmento[]): string {
 /** Datos de cita de documentos concretos, para las respuestas calculadas con SQL. */
 export async function fuentesPorDocumento(
   documentIds: string[],
+  usuarioEmail: string,
 ): Promise<FuenteCitada[]> {
   if (documentIds.length === 0) return [];
 
@@ -90,8 +95,10 @@ export async function fuentesPorDocumento(
        FROM registros r
        JOIN documents d ON d.id = r.document_id
       WHERE r.document_id = ANY($1::uuid[])
+        AND d.usuario_email = $2
+        AND d.eliminado_at IS NULL
       ORDER BY r.fecha_emision NULLS LAST`,
-    [documentIds],
+    [documentIds, usuarioEmail],
   );
 
   return rows.map((fila, i) => ({ ...fila, n: i + 1 }));

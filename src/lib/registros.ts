@@ -32,11 +32,13 @@ const CONSULTA = `
          (SELECT count(*) FROM documento_chunks c WHERE c.document_id = r.document_id)::int AS chunks
     FROM registros r
     JOIN documents d ON d.id = r.document_id
+   WHERE d.usuario_email = $1
+     AND d.eliminado_at IS NULL
    ORDER BY r.confirmado_at DESC
    LIMIT 100`;
 
-/** Documentos ya confirmados, del más reciente al más antiguo. */
-export async function listarRegistros(): Promise<Registro[]> {
-  const { rows } = await pool.query(CONSULTA);
+/** Documentos ya confirmados del usuario dado, del más reciente al más antiguo. */
+export async function listarRegistros(usuarioEmail: string): Promise<Registro[]> {
+  const { rows } = await pool.query(CONSULTA, [usuarioEmail]);
   return rows as Registro[];
 }

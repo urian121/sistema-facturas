@@ -3,6 +3,7 @@ import { pool } from "@/lib/db";
 import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
 import { aVector, embeber, textoDeRespaldo, trocear } from "@/lib/embeddings";
 import { transcribir } from "@/lib/transcripcion";
+import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -13,14 +14,20 @@ function fecha(valor: string | null | undefined): string | null {
 }
 
 export async function POST(request: Request) {
+  const usuarioEmail = await emailUsuarioActual();
+  if (!usuarioEmail) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   const { id } = await request.json().catch(() => ({ id: null }));
   if (typeof id !== "string") {
     return NextResponse.json({ error: "Falta el id del documento" }, { status: 400 });
   }
 
   const { rows } = await pool.query(
-    `SELECT extraction, filename, mime_type, data FROM documents WHERE id = $1`,
-    [id],
+    `SELECT extraction, filename, mime_type, data FROM documents
+      WHERE id = $1 AND usuario_email = $2 AND eliminado_at IS NULL`,
+    [id, usuarioEmail],
   );
   if (rows.length === 0) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });

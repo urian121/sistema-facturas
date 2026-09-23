@@ -19,9 +19,13 @@
   --line-strong: #d1d1d1;
 
   /* Los tres colores con significado. Cada uno aparece poco y siempre quiere decir lo mismo. */
-  --accent: #5b5fc7;
-  --accent-soft: #dbdbff;
-  --accent-strong: #464775;
+  --accent: #feefc3;
+  --accent-soft: #fff8e6;
+  --accent-strong: #6b4a12;
+  /* Fijo en los dos temas (no se redefine en el bloque oscuro): --accent es
+     claro en ambos, así que el texto sobre un fondo `bg-accent` sólido
+     siempre necesita este oscuro, nunca blanco. */
+  --on-accent: #4a3510;
   --warn: #9d5d00;
   --warn-soft: #fff4ce;
   --ok: #0e7a0d;
@@ -42,6 +46,7 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-strong: var(--accent-strong);
+  --color-on-accent: var(--on-accent);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-ok: var(--ok);
@@ -71,9 +76,9 @@
     --line: #3b3b3b;
     --line-strong: #4d4d4d;
 
-    --accent: #8b8cc7;
-    --accent-soft: #33344f;
-    --accent-strong: #6467b0;
+    --accent: #feefc3;
+    --accent-soft: #4a3d1f;
+    --accent-strong: #cdb06a;
     --warn: #ffb900;
     --warn-soft: #433519;
     --ok: #6ccb5f;
@@ -95,9 +100,9 @@
   --line: #3b3b3b;
   --line-strong: #4d4d4d;
 
-  --accent: #8b8cc7;
-  --accent-soft: #33344f;
-  --accent-strong: #6467b0;
+  --accent: #feefc3;
+  --accent-soft: #4a3d1f;
+  --accent-strong: #cdb06a;
   --warn: #ffb900;
   --warn-soft: #433519;
   --ok: #6ccb5f;
@@ -159,7 +164,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -168,7 +173,7 @@ input,
 textarea,
 select,
 button {
-  caret-color: var(--accent);
+  caret-color: var(--accent-strong);
   font: inherit;
 }
 

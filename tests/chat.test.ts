@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EMAIL_PRUEBA } from "./factories";
 import { DIMENSIONES } from "@/lib/embeddings";
 import type { Fragmento } from "@/lib/busqueda";
 
@@ -8,6 +9,7 @@ const release = vi.fn();
 const connect = vi.fn(async () => ({ query: clienteQuery, release }));
 
 vi.mock("@/lib/db", () => ({ pool: { query, connect } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
 // Import dinámico: el módulo toca el pool, que sólo existe tras el mock.
 const { SIMILITUD_MINIMA, construirContexto } = await import("@/lib/busqueda");
@@ -235,7 +237,7 @@ describe("presupuesto de tokens", () => {
     await POST(peticion({ pregunta: "¿cuánto?" }));
 
     const enviado = peticionDeChat();
-    expect(enviado.max_tokens).toBeGreaterThanOrEqual(2000);
+    expect(enviado.max_completion_tokens).toBeGreaterThanOrEqual(2000);
   });
 
   it("avisa cuando la respuesta se corta por longitud", async () => {

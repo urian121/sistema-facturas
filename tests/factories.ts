@@ -1,5 +1,8 @@
 import type { Extraccion } from "@/lib/schemas";
 
+/** Email de sesión que usan los tests que mockean `@/lib/auth`. */
+export const EMAIL_PRUEBA = "urian@example.com";
+
 /** Extracción mínima con todos los campos presentes, como la devuelve el modelo. */
 export function base(): Extraccion {
   return {

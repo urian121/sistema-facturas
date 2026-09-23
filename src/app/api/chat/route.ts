@@ -4,6 +4,7 @@ import { embeber } from "@/lib/embeddings";
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 import { planificar } from "@/lib/planificador";
 import { documentosCitados, ejecutarConsulta, revisarConsulta } from "@/lib/sql-seguro";
+import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -62,7 +63,7 @@ async function redactar(
     headers: cabeceras(apiKey),
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       messages: [
         { role: "system", content: system },
         ...historial,
@@ -104,6 +105,11 @@ function soloCitadas<T extends { n: number }>(respuesta: string, fuentes: T[]): 
 }
 
 export async function POST(request: Request) {
+  const usuarioEmail = await emailUsuarioActual();
+  if (!usuarioEmail) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   const cuerpo = await request.json().catch(() => null);
   const pregunta = typeof cuerpo?.pregunta === "string" ? cuerpo.pregunta.trim() : "";
 
@@ -125,27 +131,32 @@ export async function POST(request: Request) {
   const plan = await planificar(pregunta).catch(() => null);
 
   if (plan?.modo === "sql" && plan.sql) {
-    const respuesta = await responderConSql(plan.sql, pregunta, historial);
+    const respuesta = await responderConSql(plan.sql, pregunta, historial, usuarioEmail);
     if (respuesta) return respuesta;
     // Si el SQL no cuela (consulta rechazada o error de Postgres) se sigue por
     // la búsqueda semántica en vez de dejar al usuario sin respuesta.
   }
 
-  return responderConEmbeddings(pregunta, historial);
+  return responderConEmbeddings(pregunta, historial, usuarioEmail);
 }
 
-async function responderConSql(sqlPropuesto: string, pregunta: string, historial: Turno[]) {
+async function responderConSql(
+  sqlPropuesto: string,
+  pregunta: string,
+  historial: Turno[],
+  usuarioEmail: string,
+) {
   const veredicto = revisarConsulta(sqlPropuesto);
   if (!veredicto.ok) return null;
 
   let resultado;
   try {
-    resultado = await ejecutarConsulta(veredicto.sql);
+    resultado = await ejecutarConsulta(veredicto.sql, usuarioEmail);
   } catch {
     return null;
   }
 
-  const fuentes = await fuentesPorDocumento(documentosCitados(resultado.filas));
+  const fuentes = await fuentesPorDocumento(documentosCitados(resultado.filas), usuarioEmail);
 
   const contexto = [
     `Pregunta: ${pregunta}`,
@@ -184,11 +195,11 @@ async function responderConSql(sqlPropuesto: string, pregunta: string, historial
   });
 }
 
-async function responderConEmbeddings(pregunta: string, historial: Turno[]) {
+async function responderConEmbeddings(pregunta: string, historial: Turno[], usuarioEmail: string) {
   let fragmentos;
   try {
     const [embedding] = await embeber([pregunta]);
-    fragmentos = await buscarFragmentos(embedding);
+    fragmentos = await buscarFragmentos(embedding, usuarioEmail);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Error buscando en los documentos" },

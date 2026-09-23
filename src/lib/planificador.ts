@@ -45,7 +45,7 @@ export async function planificar(pregunta: string): Promise<Plan> {
     headers: cabeceras(apiKey),
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
       response_format: {
         type: "json_schema",
         json_schema: { name: "plan", strict: true, schema: jsonSchema },

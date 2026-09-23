@@ -7,6 +7,7 @@ import Tooltip from "./tooltip";
 import {
   IconoAjustes,
   IconoArchivo,
+  IconoCerrarSesion,
   IconoInicio,
   IconoPapelera,
   IconoPregunta,
@@ -33,13 +34,17 @@ export default function Riel({
   onCambiarVista,
   onAbrirChat,
   onAbrirSubir,
+  onAbrirPapelera,
+  onCerrarSesion,
   contadorArchivo,
 }: {
-  vista: "revisar" | "archivo";
+  vista: "revisar" | "archivo" | "papelera";
   onIrAlInicio: () => void;
   onCambiarVista: () => void;
   onAbrirChat: () => void;
   onAbrirSubir: () => void;
+  onAbrirPapelera: () => void;
+  onCerrarSesion: () => Promise<void>;
   contadorArchivo: number;
 }) {
   const items: Item[] = [
@@ -62,9 +67,8 @@ export default function Riel({
     { clave: "preguntar", etiqueta: "Preguntar", icono: IconoPregunta, onClick: onAbrirChat },
   ];
 
-  // Sin pantalla de ajustes ni papelera todavía: avisan en vez de quedar mudos al pulsarlos.
+  // Sin pantalla de ajustes todavía: avisa en vez de quedar mudo al pulsarlo.
   const abrirAjustes = () => notificar.ok("Los ajustes llegan pronto");
-  const abrirPapelera = () => notificar.ok("La papelera llega pronto");
 
   const boton = (item: Item, posicion: "top" | "right") => {
     const Icono = item.icono;
@@ -77,13 +81,13 @@ export default function Riel({
           aria-pressed={item.activo}
           className={`relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg transition ${
             item.activo
-              ? "bg-accent-soft text-accent"
+              ? "bg-accent-soft text-accent-strong"
               : "text-ink-soft hover:bg-surface hover:text-ink"
           }`}
         >
           <Icono className="h-5 w-5" />
           {!!item.contador && (
-            <span className="cifra absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium leading-none text-white">
+            <span className="cifra absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-medium leading-none text-on-accent">
               {item.contador}
             </span>
           )}
@@ -103,11 +107,26 @@ export default function Riel({
         <div className="flex-1" />
         <ConmutadorTema posicion="right" />
         {boton(
-          { clave: "papelera", etiqueta: "Papelera", icono: IconoPapelera, onClick: abrirPapelera },
+          {
+            clave: "papelera",
+            etiqueta: "Papelera",
+            icono: IconoPapelera,
+            activo: vista === "papelera",
+            onClick: onAbrirPapelera,
+          },
           "right",
         )}
         {boton(
           { clave: "ajustes", etiqueta: "Ajustes", icono: IconoAjustes, onClick: abrirAjustes },
+          "right",
+        )}
+        {boton(
+          {
+            clave: "cerrar-sesion",
+            etiqueta: "Cerrar sesión",
+            icono: IconoCerrarSesion,
+            onClick: () => onCerrarSesion(),
+          },
           "right",
         )}
       </nav>
@@ -120,11 +139,26 @@ export default function Riel({
         {items.map((item) => boton(item, "top"))}
         <ConmutadorTema posicion="top" />
         {boton(
-          { clave: "papelera", etiqueta: "Papelera", icono: IconoPapelera, onClick: abrirPapelera },
+          {
+            clave: "papelera",
+            etiqueta: "Papelera",
+            icono: IconoPapelera,
+            activo: vista === "papelera",
+            onClick: onAbrirPapelera,
+          },
           "top",
         )}
         {boton(
           { clave: "ajustes", etiqueta: "Ajustes", icono: IconoAjustes, onClick: abrirAjustes },
+          "top",
+        )}
+        {boton(
+          {
+            clave: "cerrar-sesion",
+            etiqueta: "Cerrar sesión",
+            icono: IconoCerrarSesion,
+            onClick: () => onCerrarSesion(),
+          },
           "top",
         )}
       </nav>

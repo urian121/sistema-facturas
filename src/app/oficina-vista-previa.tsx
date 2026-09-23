@@ -43,7 +43,7 @@ export default function OficinaVistaPrevia({
       href={`/api/files/${docId}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-[13px] text-accent underline"
+      className="text-[13px] text-accent-strong underline"
     >
       Abrir {filename}
     </a>

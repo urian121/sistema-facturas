@@ -30,7 +30,7 @@ const LINEA_VACIA = { descripcion: "", cantidad: null, precio_unitario: null, im
 function entrada(conError: boolean, cifra = false) {
   return [
     "w-full rounded-md border bg-surface px-2.5 py-1.5 text-[13px] text-ink outline-none transition",
-    "placeholder:text-label/70 hover:border-line-strong focus:border-accent focus:ring-2 focus:ring-accent/15",
+    "placeholder:text-label/70 hover:border-line-strong focus:border-accent-strong focus:ring-2 focus:ring-accent-strong/15",
     cifra ? "cifra text-right" : "",
     conError ? "border-warn/60 bg-warn-soft" : "border-line",
   ].join(" ");
@@ -154,7 +154,7 @@ export default function DatosForm({
             id="tipo-doc"
             value={tipo}
             onChange={(e) => cambiarTipo(e.target.value as TipoDocumento)}
-            className="rounded-md border border-line bg-surface px-2 py-1 text-[13px] outline-none transition hover:border-line-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
+            className="rounded-md border border-line bg-surface px-2 py-1 text-[13px] outline-none transition hover:border-line-strong focus:border-accent-strong focus:ring-2 focus:ring-accent-strong/15"
           >
             {TIPOS.map((t) => (
               <option key={t} value={t}>
@@ -306,7 +306,7 @@ export default function DatosForm({
             <button
               type="button"
               onClick={() => set("lineas", [...extraccion.lineas, { ...LINEA_VACIA }])}
-              className="mt-2 flex cursor-pointer items-center gap-1 text-[13px] text-accent transition hover:underline"
+              className="mt-2 flex cursor-pointer items-center gap-1 text-[13px] text-accent-strong transition hover:underline"
             >
               <IconoMas className="h-3.5 w-3.5" />
               Añadir línea
@@ -374,7 +374,7 @@ export default function DatosForm({
             onClick={onConfirmar}
             disabled={confirmando || guardando || !valido}
             title={valido ? undefined : "Corrige los campos marcados"}
-            className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {confirmando ? "Archivando…" : confirmado ? "Volver a archivar" : "Confirmar y archivar"}
           </button>

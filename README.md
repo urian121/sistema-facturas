@@ -35,6 +35,7 @@ volver a ejecutar sin romper nada.
 | `src/app/datos-form.tsx` | Formulario editable con los campos inválidos en rojo |
 | `src/app/chat.tsx` | Chat con citas clicables que abren el documento citado |
 | `src/app/api/upload` | `POST` recibe el archivo y lo guarda en `documents` |
+| `src/lib/limites-subida.ts` | Tipos y peso máximo permitidos al subir, configurables por `.env.local` |
 | `src/app/api/extract` | `POST {id}` envía el archivo al modelo de visión y guarda el JSON |
 | `src/app/api/documents/[id]` | `PATCH` guarda el borrador con las correcciones |
 | `src/app/api/confirm` | `POST {id}` valida, escribe en las tablas e indexa el texto |
@@ -51,6 +52,111 @@ volver a ejecutar sin romper nada.
 | `src/app/api/preview/[id]` | `GET` datos reales para la miniatura de Office (tabla o texto) |
 | `src/app/pdf-miniatura.tsx` | Miniatura de PDF con `pdfjs-dist`, renderizada en el navegador |
 | `src/lib/db.ts` | Pool de `pg` reutilizado entre recargas en desarrollo |
+| `src/lib/auth.ts` | Configuración de Auth.js: proveedores, sesión JWT, auditoría de logins |
+| `src/app/login/` | Página de login y sus piezas (botones, acciones, iconos de marca) |
+| `src/proxy.ts` | Corre antes de cada ruta: sin sesión, redirige a `/login` |
+
+Tipos de archivo y peso máximo al subir, en `.env.local` (opcionales, con
+defaults si no se definen):
+
+| Variable | Por defecto |
+| --- | --- |
+| `UPLOAD_MAX_MB` | `20` |
+| `UPLOAD_TIPOS_PERMITIDOS` | Imágenes (png/jpeg/webp/gif), PDF, Word, Excel, PowerPoint |
+
+Se leen una sola vez en `src/lib/limites-subida.ts` y de ahí bajan como props
+hasta `SubirModal` — nada de `NEXT_PUBLIC_`, porque el navegador nunca lee la
+variable de entorno directamente.
+
+## Login
+
+Login solo con Google (por ahora) vía [Auth.js](https://authjs.dev/) — nada de
+usuario/contraseña propios ni tabla `users` nueva: la sesión se guarda firmada
+en una cookie (JWT), no en la base de datos. Cada documento queda además
+asociado al email de quien lo sube (`documents.usuario_email`): un usuario
+jamás ve los archivos de otro, ni siquiera a través del chat con SQL libre
+(`src/lib/sql-seguro.ts` filtra por dueño con vistas temporales antes de dejar
+correr la consulta que arma el modelo).
+
+| Variable | Para qué |
+| --- | --- |
+| `AUTH_SECRET` | Firma la cookie de sesión |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Credenciales OAuth de la app en Google Cloud |
+
+### Cómo conseguir cada una
+
+**`AUTH_SECRET`** — una cadena aleatoria, no depende de ningún servicio externo.
+En una terminal con `openssl` (Linux/Mac/Git Bash en Windows):
+
+```bash
+openssl rand -base64 32
+```
+
+Sin `openssl` a mano, el mismo resultado con Node (ya viene con el proyecto):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Pegar el resultado tal cual en `AUTH_SECRET=` de `.env.local`.
+
+**`AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET`** — se sacan de una app OAuth propia en
+Google Cloud, no de la cuenta de Google Firebase ni de ningún "API key" suelto:
+
+1. Entrar a la [consola de credenciales de Google Cloud](https://console.cloud.google.com/apis/credentials).
+2. Si no hay un proyecto todavía: selector de proyecto (arriba a la izquierda) →
+   **"Nuevo proyecto"** → ponerle un nombre (p. ej. "Gestor de Facturas") → crear.
+3. **"Configurar pantalla de consentimiento"** (OAuth consent screen) — Google lo
+   pide antes de dejar crear la credencial:
+   - Tipo de usuario: **External** (si es una cuenta de Google personal, no de
+     Google Workspace).
+   - Nombre de la app, email de soporte, email de contacto del desarrollador:
+     con los datos propios alcanza para desarrollo/uso personal.
+4. Volver a **Credentials** → **"+ Crear credenciales"** → **"ID de cliente de
+   OAuth"**.
+5. Tipo de aplicación: **"Aplicación web"**.
+6. En **"URI de redirección autorizados"** agregar exactamente:
+
+   ```text
+   http://localhost:3000/api/auth/callback/google
+   ```
+
+   y, en producción, la misma ruta con el dominio real:
+   `https://tu-dominio.com/api/auth/callback/google`.
+7. Guardar. Google muestra un **Client ID** y un **Client Secret** — van en
+   `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET` de `.env.local` respectivamente.
+
+Referencia oficial de esta pantalla:
+[Google Identity — OAuth 2.0 para aplicaciones web](https://developers.google.com/identity/protocols/oauth2/web-server),
+y del lado de Auth.js: [proveedor de Google](https://authjs.dev/getting-started/providers/google).
+
+`src/proxy.ts` (el `middleware.ts` de versiones anteriores de Next.js, renombrado
+en la 16) corre antes de cualquier ruta: sin sesión válida redirige a `/login`, o
+devuelve 401 si la ruta es de `/api`.
+
+### Auditoría de accesos
+
+Cada login (no cada usuario: cada vez que alguien entra) queda registrado en
+`auditoria_login` — email, nombre, cuándo entró y, si cierra sesión con el
+botón de la app, cuándo salió. Se llena sola desde los `callbacks`/`events` de
+Auth.js en `src/lib/auth.ts`, no hace falta tocar nada para que funcione.
+
+| Columna | Contenido |
+| --- | --- |
+| `usuario_email` / `usuario_nombre` | Los que trae la cuenta de Google |
+| `iniciado_at` | Cuándo se logueó |
+| `finalizado_at` | Cuándo cerró sesión — `NULL` si simplemente cerró la pestaña (la cookie expira sola, eso no queda registrado) |
+
+No hay pantalla propia todavía: para ver quién entra y con qué frecuencia, una
+consulta directa alcanza, por ejemplo los usuarios más activos del último mes:
+
+```sql
+SELECT usuario_email, count(*) AS logins, max(iniciado_at) AS ultimo_login
+  FROM auditoria_login
+ WHERE iniciado_at > now() - interval '30 days'
+ GROUP BY usuario_email
+ ORDER BY logins DESC;
+```
 
 ## Extracción
 
@@ -61,7 +167,7 @@ resultado se valida otra vez con Zod antes de guardarlo.
 | Variable | Por defecto | Para qué |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | — | Obligatoria |
-| `OPENAI_MODEL` | `gpt-4.1-mini` | Modelo de visión |
+| `OPENAI_MODEL` | `gpt-5.6-luna` | Modelo de visión |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Debe dar 1536 dimensiones, las de la columna `vector(1536)` |
 
 Las imágenes viajan como `image_url` en base64; los PDFs como parte `file` con el
@@ -129,13 +235,8 @@ los campos marcados en rojo, porque suelen ser correcciones en curso.
 
 ## Despliegue
 
-Está desplegado en [Seenode](https://seenode.com) (Frankfurt) desde la rama `master`
-de este repositorio:
-
-| Recurso | Detalle |
-| --- | --- |
-| App web | Node 24, paquete Basic (0.25 CPU / 512 MB) |
-| Base de datos | PostgreSQL 16.14 gestionado, paquete Basic (1 GB), con pgvector 0.8.6 |
+Hace falta un hosting Node.js y un PostgreSQL 16+ con la extensión `pgvector`
+(gestionado o propio):
 
 - **Build:** `npm ci --include=dev && npm run build`. El `--include=dev` es
   obligatorio: con `NODE_ENV=production`, `npm ci` se saltaría Tailwind y PostCSS,
@@ -143,17 +244,12 @@ de este repositorio:
 - **Arranque:** `node scripts/migrate.mjs && npx next start`. El script aplica
   `db/init/*.sql` (todo idempotente) y deja escrito en el log qué versión de pgvector
   encontró; en local es el mismo script (`npm run migrate`) el que hace ese trabajo.
-- **Variables:** `DATABASE_URL` la inyecta Seenode al enlazar la base;
-  `OPENAI_API_KEY` va como secreto; `DATABASE_SSL=on` fuerza TLS, porque el
-  Postgres gestionado rechaza las conexiones sin cifrar.
+- **Variables:** `DATABASE_URL` apunta a la base de datos; `OPENAI_API_KEY` va como
+  secreto; si el Postgres gestionado exige TLS, `DATABASE_SSL=on` lo fuerza (ver
+  `src/lib/db.ts`).
 
-La entrega continua (`autoDeploy`) está activada en la aplicación, pero sólo entra en
-funcionamiento cuando la GitHub App de Seenode está instalada sobre el repositorio:
-es ella quien crea el webhook de push. Sin esa instalación el flag no hace nada y hay
-que lanzar el despliegue a mano.
-
-Cuando esté activa, cada push a `master` dispara build y despliegue, así que conviene
-que `npm test` y `npm run build` pasen antes de empujar: esa rama sirve producción.
+Sea cual sea el mecanismo de despliegue, conviene que `npm test` y `npm run build`
+pasen antes de empujar a la rama que sirve producción.
 
 ## Tests
 
@@ -248,7 +344,7 @@ Tres decisiones que importan:
   en vez de improvisar sobre contexto vacío.
 - **Sólo documentos confirmados**: la consulta hace `JOIN` con `registros`, así que los
   borradores no contaminan las respuestas.
-- **Modelo sin razonamiento** (`gpt-4.1-mini`): para citar datos no hace falta que el
+- **Modelo sin razonamiento** (`gpt-5.6-luna`): para citar datos no hace falta que el
   modelo razone, y uno que sí lo hace se comería el presupuesto de tokens antes de
   llegar a la respuesta.
 
@@ -259,11 +355,19 @@ que no sean `user`/`assistant`.
 
 | Tabla | Contenido |
 | --- | --- |
-| `documents` | Archivo original (bytea), su tipo y el borrador `extraction` (jsonb) |
+| `documents` | Archivo original (bytea), su tipo, el borrador `extraction` (jsonb), dueño (`usuario_email`) y papelera (`eliminado_at`) |
 | `registros` | Una fila por documento confirmado: partes, fechas, importes |
 | `registro_lineas` | Conceptos de facturas y recibos |
 | `registro_contratos` | Objeto, vigencia, ley aplicable y cláusulas |
 | `documento_chunks` | Fragmentos de texto y su `vector(1536)`, con índice HNSW |
+| `auditoria_login` | Una fila por login (ver [Login](#login)) |
+
+`documents.eliminado_at` es la papelera: columna en vez de tabla aparte
+(`NULL` = activo, con fecha = en la papelera), por la misma razón que
+`usuario_email` — todo lo que cuelga de `documents` (`registros`, chunks) se
+filtra siempre con `JOIN`, nunca hace falta tocarlo aparte. `PATCH
+/api/documents/[id]` con `{ "papelera": true/false }` mueve o restaura;
+`DELETE` sigue siendo el borrado definitivo (se usa sólo desde la papelera).
 
 El esquema se aplica con `npm run migrate` (`db/init/*.sql`, idempotente).
 

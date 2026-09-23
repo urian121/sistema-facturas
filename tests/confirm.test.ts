@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { contratoValido, facturaValida } from "./factories";
+import { EMAIL_PRUEBA, contratoValido, facturaValida } from "./factories";
 import { DIMENSIONES } from "@/lib/embeddings";
 import type { Extraccion } from "@/lib/schemas";
 
@@ -9,6 +9,7 @@ const release = vi.fn();
 const connect = vi.fn(async () => ({ query: clienteQuery, release }));
 
 vi.mock("@/lib/db", () => ({ pool: { query, connect } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
 const { POST } = await import("@/app/api/confirm/route");
 

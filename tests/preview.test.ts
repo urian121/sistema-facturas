@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
+import { EMAIL_PRUEBA } from "./factories";
 import { MIME_OFICINA } from "@/lib/mime-oficina";
 
 const query = vi.fn();
 vi.mock("@/lib/db", () => ({ pool: { query } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
 const { GET } = await import("@/app/api/preview/[id]/route");
 

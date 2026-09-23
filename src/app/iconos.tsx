@@ -176,11 +176,67 @@ export const IconoInicio = (p: Props) => (
   </Svg>
 );
 
+/** Carpeta: acceso al historial de documentos (toggle móvil del panel de datos). */
+export const IconoCarpeta = (p: Props) => (
+  <Svg {...p}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  </Svg>
+);
+
+/** Puerta con flecha de salida: cerrar sesión. */
+export const IconoCerrarSesion = (p: Props) => (
+  <Svg {...p}>
+    <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
+    <path d="M14 8l4 4-4 4" />
+    <path d="M18 12H9" />
+  </Svg>
+);
+
 export const IconoPapelera = (p: Props) => (
   <Svg {...p}>
     <path d="M4 7h16" />
     <path d="M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7" />
     <path d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
     <path d="M10 11v6M14 11v6" />
+  </Svg>
+);
+
+/** Puntos verticales: abre el menú de opciones de una tarjeta (estilo Drive). */
+export const IconoPuntos = (p: Props) => (
+  <Svg {...p}>
+    <path d="M12 5.5h.01M12 12h.01M12 18.5h.01" strokeWidth={2.6} />
+  </Svg>
+);
+
+/** Cuadrícula de 9 puntos ("waffle"): selector de aplicaciones, estilo Google/Microsoft. */
+export const IconoAplicaciones = (p: Props) => (
+  <Svg {...p}>
+    <path
+      d="M6 6h.01M12 6h.01M18 6h.01M6 12h.01M12 12h.01M18 12h.01M6 18h.01M12 18h.01M18 18h.01"
+      strokeWidth={2.6}
+    />
+  </Svg>
+);
+
+export const IconoAbrirExterno = (p: Props) => (
+  <Svg {...p}>
+    <path d="M10 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4" />
+    <path d="M14 4h6v6" />
+    <path d="M20 4 11 13" />
+  </Svg>
+);
+
+export const IconoDescargar = (p: Props) => (
+  <Svg {...p}>
+    <path d="M12 4v11" />
+    <path d="m7 10.5 5 5 5-5" />
+    <path d="M4 19.5h16" />
+  </Svg>
+);
+
+export const IconoLapiz = (p: Props) => (
+  <Svg {...p}>
+    <path d="M16.5 4.5a2.1 2.1 0 0 1 3 3L7.5 19.5 3 21l1.5-4.5Z" />
+    <path d="M14.5 6.5l3 3" />
   </Svg>
 );

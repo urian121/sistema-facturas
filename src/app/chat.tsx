@@ -50,7 +50,7 @@ function conCitas(texto: string, fuentes: Fuente[], onAbrir: (id: string) => voi
             ? ""
             : ` · ${Math.round(fuente.similitud * 100)}% de similitud`
         }`}
-        className="mx-0.5 cursor-pointer rounded bg-accent-soft px-1 align-baseline text-[11px] font-medium text-accent transition hover:bg-accent/15"
+        className="mx-0.5 cursor-pointer rounded bg-accent-soft px-1 align-baseline text-[11px] font-medium text-accent-strong transition hover:bg-accent/15"
       >
         {parte}
       </button>
@@ -201,10 +201,10 @@ export default function Chat({
                           <button
                             type="button"
                             onClick={() => onAbrirDocumento(f.document_id)}
-                            className="cursor-pointer text-left text-[12px] leading-relaxed text-label transition hover:text-accent"
+                            className="cursor-pointer text-left text-[12px] leading-relaxed text-label transition hover:text-accent-strong"
                             title={f.fragmento}
                           >
-                            <span className="font-medium text-accent">[{f.n}]</span>{" "}
+                            <span className="font-medium text-accent-strong">[{f.n}]</span>{" "}
                             {etiquetaTipo(f.tipo_documento)}
                             {f.numero_documento ? ` ${f.numero_documento}` : ""}
                             {f.emisor_nombre ? ` · ${f.emisor_nombre}` : ""}
@@ -249,14 +249,14 @@ export default function Chat({
             placeholder={
               hayDocumentos ? "Escribe tu pregunta…" : "Aún no hay nada archivado"
             }
-            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:opacity-60"
+            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-accent-strong focus:ring-2 focus:ring-accent-strong/15 disabled:opacity-60"
           />
           <Tooltip etiqueta="Enviar pregunta" posicion="top" className="shrink-0">
             <button
               type="submit"
               disabled={!hayDocumentos || pensando || pregunta.trim() === ""}
               aria-label="Preguntar"
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-accent text-white transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-accent text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <IconoEnviar className="h-3.5 w-3.5" />
             </button>

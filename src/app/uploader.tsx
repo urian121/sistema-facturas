@@ -1,17 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type DragEvent as ReactDragEvent } from "react";
+import { TIPO_ARRASTRE_DOCUMENTO } from "./arrastrar-documento";
 import Chat from "./chat";
 import DatosForm from "./datos-form";
 import HistorialDocumentos from "./historial-documentos";
 import ListaRegistros from "./lista-registros";
 import { notificar } from "./notificar";
 import OficinaVistaPrevia from "./oficina-vista-previa";
+import Papelera, { type DocPapelera } from "./papelera";
 import Riel from "./riel";
 import SubirModal from "./subir-modal";
 import Tooltip from "./tooltip";
 import {
+  IconoAplicaciones,
   IconoAviso,
+  IconoCarpeta,
   IconoConforme,
   IconoDestello,
   IconoDocumento,
@@ -73,21 +77,34 @@ export default function Uploader({
   initialDocs,
   initialRegistros,
   dbError,
+  usuario,
+  onCerrarSesion,
+  tiposPermitidos,
+  maxMB,
 }: {
   initialDocs: Doc[];
   initialRegistros: Registro[];
   dbError: string | null;
+  usuario: { name?: string | null; email?: string | null; image?: string | null } | null;
+  onCerrarSesion: () => Promise<void>;
+  tiposPermitidos: string[];
+  maxMB: number;
 }) {
   const [docs, setDocs] = useState<Doc[]>(initialDocs);
   const [registros, setRegistros] = useState<Registro[]>(initialRegistros);
   // Sin selección por defecto: el usuario elige del historial o sube algo nuevo.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [vista, setVista] = useState<"revisar" | "archivo">("revisar");
+  const [vista, setVista] = useState<"revisar" | "archivo" | "papelera">("revisar");
+  const [papeleraDocs, setPapeleraDocs] = useState<DocPapelera[]>([]);
+  const [papeleraCargando, setPapeleraCargando] = useState(false);
   // En móvil no caben documento e inspector a la vez: se conmuta entre ellos.
   const [panelMovil, setPanelMovil] = useState<"documento" | "datos">("documento");
   const [subirAbierto, setSubirAbierto] = useState(false);
   const [chatAbierto, setChatAbierto] = useState(false);
   const [dragging, setDragging] = useState(false);
+  // Distinto de `dragging`: ese es para archivos del sistema operativo, este
+  // es para arrastrar una tarjeta del historial hasta este mismo panel.
+  const [soltandoDoc, setSoltandoDoc] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -217,6 +234,118 @@ export default function Uploader({
     setPanelMovil("documento");
   }, []);
 
+  const renombrar = useCallback(
+    async (id: string, filename: string) => {
+      const anterior = docs.find((d) => d.id === id)?.filename;
+      actualizar(id, { filename });
+      try {
+        const res = await fetch(`/api/documents/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? "No se pudo renombrar el documento");
+        }
+        notificar.ok("Documento renombrado");
+      } catch (err) {
+        if (anterior !== undefined) actualizar(id, { filename: anterior });
+        notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      }
+    },
+    [docs, actualizar],
+  );
+
+  /** "Eliminar" desde el historial no borra: manda a la papelera, de donde se puede restaurar. */
+  const eliminar = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/documents/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ papelera: true }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? "No se pudo mover a la papelera");
+        }
+        setDocs((prev) => prev.filter((d) => d.id !== id));
+        setRegistros((prev) => prev.filter((r) => r.document_id !== id));
+        if (selectedId === id) irAlInicio();
+        notificar.ok("Documento movido a la papelera");
+      } catch (err) {
+        notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      }
+    },
+    [selectedId, irAlInicio],
+  );
+
+  const abrirPapelera = useCallback(async () => {
+    setVista("papelera");
+    setPapeleraCargando(true);
+    try {
+      const res = await fetch("/api/documents/papelera");
+      if (!res.ok) throw new Error("No se pudo cargar la papelera");
+      setPapeleraDocs(await res.json());
+    } catch (err) {
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setPapeleraCargando(false);
+    }
+  }, []);
+
+  const restaurar = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/documents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ papelera: false }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "No se pudo restaurar el documento");
+      }
+      setPapeleraDocs((prev) => prev.filter((d) => d.id !== id));
+      const refresco = await fetch("/api/documents");
+      if (refresco.ok) setDocs(await refresco.json());
+      notificar.ok("Documento restaurado");
+    } catch (err) {
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }, []);
+
+  const eliminarDefinitivo = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "No se pudo eliminar el documento");
+      }
+      setPapeleraDocs((prev) => prev.filter((d) => d.id !== id));
+      notificar.ok("Documento eliminado para siempre");
+    } catch (err) {
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }, []);
+
+  const alPasarDocumentoPorEncima = useCallback((e: ReactDragEvent<HTMLElement>) => {
+    if (!e.dataTransfer.types.includes(TIPO_ARRASTRE_DOCUMENTO)) return;
+    e.preventDefault();
+    setSoltandoDoc(true);
+  }, []);
+
+  const alSoltarDocumento = useCallback(
+    (e: ReactDragEvent<HTMLElement>) => {
+      const id = e.dataTransfer.getData(TIPO_ARRASTRE_DOCUMENTO);
+      setSoltandoDoc(false);
+      if (!id) return;
+      e.preventDefault();
+      abrirDocumento(id);
+    },
+    [abrirDocumento],
+  );
+
   // Arrastrar sobre cualquier punto de la ventana: el objetivo es la aplicación entera.
   useEffect(() => {
     const sobre = (e: DragEvent) => {
@@ -244,32 +373,80 @@ export default function Uploader({
   }, [upload]);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden lg:flex-row">
-      <Riel
-        vista={vista}
-        onIrAlInicio={irAlInicio}
-        onCambiarVista={() => setVista(vista === "archivo" ? "revisar" : "archivo")}
-        onAbrirChat={() => setChatAbierto(true)}
-        onAbrirSubir={() => setSubirAbierto(true)}
-        contadorArchivo={registros.length}
-      />
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-14 lg:pb-0">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      {/* A todo el ancho, por encima del riel: por eso vive fuera de la fila de abajo. */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-sunken px-4">
+        <Tooltip etiqueta="Aplicaciones" posicion="right">
+          <button
+            type="button"
+            onClick={() => notificar.ok("El selector de aplicaciones llega pronto")}
+            aria-label="Aplicaciones"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft transition hover:bg-surface hover:text-ink"
+          >
+            <IconoAplicaciones className="h-4 w-4" />
+          </button>
+        </Tooltip>
+
         <span className="font-marca text-[17px] font-semibold tracking-[-0.01em]">
           Gestor de Facturas
         </span>
 
-        <Tooltip etiqueta="Perfil" posicion="left" className="ml-auto">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent transition hover:bg-surface"
-            aria-label="Perfil"
-          >
-            <IconoPerfil className="h-4 w-4" />
-          </div>
-        </Tooltip>
+        <div className="ml-auto flex items-center gap-3">
+          {vista === "revisar" && (
+            <Tooltip
+              etiqueta={
+                panelMovil === "datos" ? "Ver documento" : selected ? "Ver datos" : "Ver historial"
+              }
+              posicion="left"
+              className="lg:hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setPanelMovil(panelMovil === "datos" ? "documento" : "datos")}
+                aria-label={
+                  panelMovil === "datos" ? "Ver documento" : selected ? "Ver datos" : "Ver historial"
+                }
+                aria-pressed={panelMovil === "datos"}
+                className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full transition ${
+                  panelMovil === "datos"
+                    ? "bg-accent-soft text-accent-strong"
+                    : "text-ink-soft hover:bg-surface hover:text-ink"
+                }`}
+              >
+                <IconoCarpeta className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          )}
+
+          <Tooltip etiqueta={usuario?.name ?? usuario?.email ?? "Perfil"} posicion="left">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft text-accent-strong"
+              aria-label={usuario?.name ?? usuario?.email ?? "Perfil"}
+            >
+              {usuario?.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={usuario.image} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <IconoPerfil className="h-4 w-4" />
+              )}
+            </div>
+          </Tooltip>
+        </div>
       </header>
 
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Riel
+          vista={vista}
+          onIrAlInicio={irAlInicio}
+          onCambiarVista={() => setVista(vista === "archivo" ? "revisar" : "archivo")}
+          onAbrirChat={() => setChatAbierto(true)}
+          onAbrirSubir={() => setSubirAbierto(true)}
+          onAbrirPapelera={abrirPapelera}
+          onCerrarSesion={onCerrarSesion}
+          contadorArchivo={registros.length}
+        />
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-14 lg:pb-0">
       {dbError && dbErrorVisible && (
         <div className="flex shrink-0 items-start gap-2 border-b border-danger/25 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
           <IconoAviso className="mt-0.5 h-3.5 w-3.5" />
@@ -291,39 +468,34 @@ export default function Uploader({
             onAbrir={abrirDocumento}
           />
         </div>
+      ) : vista === "papelera" ? (
+        <div className="flex-1 overflow-y-auto">
+          <Papelera
+            docs={papeleraDocs}
+            cargando={papeleraCargando}
+            onRestaurar={restaurar}
+            onEliminarDefinitivo={eliminarDefinitivo}
+          />
+        </div>
       ) : (
         <>
-          {selected && (
-            <div className="flex shrink-0 border-b border-line bg-surface lg:hidden">
-              {(
-                [
-                  ["documento", "Documento"],
-                  ["datos", "Historial de Archivos"],
-                ] as const
-              ).map(([clave, etiqueta]) => (
-                <button
-                  key={clave}
-                  onClick={() => setPanelMovil(clave)}
-                  aria-current={panelMovil === clave}
-                  className={`flex-1 cursor-pointer border-b-2 px-3 py-2 text-[13px] transition ${
-                    panelMovil === clave
-                      ? "border-accent bg-[#e5e6ff] text-accent"
-                      : "border-transparent text-label hover:text-ink"
-                  }`}
-                >
-                  {etiqueta}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[2fr_3fr]">
             {/* Documento */}
             <section
-              className={`relative min-h-0 min-w-0 flex-col border-b border-line lg:flex lg:border-b-0 lg:border-r ${
-                panelMovil === "documento" || !selected ? "flex" : "hidden"
-              }`}
+              onDragOver={alPasarDocumentoPorEncima}
+              onDragLeave={() => setSoltandoDoc(false)}
+              onDrop={alSoltarDocumento}
+              className={`relative min-h-0 min-w-0 flex-col border-b border-line transition lg:flex lg:border-b-0 lg:border-r ${
+                panelMovil === "documento" ? "flex" : "hidden"
+              } ${soltandoDoc ? "ring-2 ring-inset ring-accent-strong" : ""}`}
             >
+              {dragging && !subirAbierto && (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-accent/5 backdrop-blur-[1px]">
+                  <div className="rounded-xl border-2 border-dashed border-accent-strong bg-surface px-6 py-4 text-[13px] font-normal text-accent-strong">
+                    Suelta el documento para subirlo
+                  </div>
+                </div>
+              )}
               {selected ? (
                 <>
                   <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-2.5 text-[13px]">
@@ -348,7 +520,7 @@ export default function Uploader({
                       >
                         <p className="p-6 text-[13px] text-ink-soft">
                           Tu navegador no puede mostrar el PDF.{" "}
-                          <a className="text-accent underline" href={`/api/files/${selected.id}`}>
+                          <a className="text-accent-strong underline" href={`/api/files/${selected.id}`}>
                             Ábrelo en una pestaña
                           </a>
                         </p>
@@ -374,7 +546,7 @@ export default function Uploader({
                       <button
                         onClick={() => analyze(selected.id)}
                         disabled={analyzing}
-                        className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-normal text-white shadow-[0_8px_24px_-8px_rgba(36,36,36,0.45)] transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-normal text-on-accent shadow-[0_8px_24px_-8px_rgba(36,36,36,0.45)] transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <IconoDestello className="h-3.5 w-3.5" />
                         {analyzing ? "Analizando…" : "Analizar documento"}
@@ -385,7 +557,7 @@ export default function Uploader({
               ) : docs.length === 0 ? (
                 <ZonaVacia
                   titulo="Arrastra el documento aquí o haz clic para elegirlo"
-                  descripcion="Factura, recibo o contrato · imagen, PDF, Word, Excel o PowerPoint · hasta 20 MB"
+                  descripcion={`Factura, recibo o contrato · imagen, PDF, Word, Excel o PowerPoint · hasta ${maxMB} MB`}
                   onClick={() => setSubirAbierto(true)}
                 />
               ) : (
@@ -400,7 +572,7 @@ export default function Uploader({
             {/* Datos */}
             <section
               className={`min-h-0 min-w-0 flex-col bg-surface lg:flex ${
-                panelMovil === "datos" && selected ? "flex" : "hidden lg:flex"
+                panelMovil === "datos" ? "flex" : "hidden"
               }`}
             >
               {!selected ? (
@@ -414,6 +586,8 @@ export default function Uploader({
                     selectedId={selectedId}
                     archivados={archivados}
                     onElegir={abrirDocumento}
+                    onRenombrar={renombrar}
+                    onEliminar={eliminar}
                   />
                 )
               ) : !selected.extraction ? (
@@ -430,6 +604,8 @@ export default function Uploader({
                     selectedId={selectedId}
                     archivados={archivados}
                     onElegir={abrirDocumento}
+                    onRenombrar={renombrar}
+                    onEliminar={eliminar}
                   />
                 )
               ) : (
@@ -462,6 +638,7 @@ export default function Uploader({
           </div>
         </>
       )}
+        </div>
       </div>
 
       <Chat
@@ -477,17 +654,11 @@ export default function Uploader({
       {subirAbierto && (
         <SubirModal
           subiendo={uploading}
+          tiposPermitidos={tiposPermitidos}
+          maxMB={maxMB}
           onCerrar={() => setSubirAbierto(false)}
           onArchivo={upload}
         />
-      )}
-
-      {dragging && !subirAbierto && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-accent/5 backdrop-blur-[1px]">
-          <div className="rounded-xl border-2 border-dashed border-accent bg-surface px-6 py-4 text-[13px] font-medium text-accent">
-            Suelta el documento para subirlo
-          </div>
-        </div>
       )}
     </div>
   );

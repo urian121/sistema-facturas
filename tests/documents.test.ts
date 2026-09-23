@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { facturaValida } from "./factories";
+import { EMAIL_PRUEBA, facturaValida } from "./factories";
 
 const query = vi.fn();
 vi.mock("@/lib/db", () => ({ pool: { query } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
-const { PATCH } = await import("@/app/api/documents/[id]/route");
+const { PATCH, DELETE } = await import("@/app/api/documents/[id]/route");
 
 const ID = "11111111-1111-1111-1111-111111111111";
 const params = Promise.resolve({ id: ID });
@@ -76,6 +77,85 @@ describe("PATCH /api/documents/[id]", () => {
     query.mockResolvedValue({ rowCount: 0, rows: [] });
 
     const res = await PATCH(peticion({ extraction: facturaValida() }), { params });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("renombra el documento cuando el cuerpo trae filename", async () => {
+    const res = await PATCH(peticion({ filename: "  factura-nueva.pdf  " }), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.filename).toBe("factura-nueva.pdf");
+    expect(query.mock.calls[0][1]).toEqual([ID, "factura-nueva.pdf", EMAIL_PRUEBA]);
+  });
+
+  it("rechaza renombrar a un nombre vacío", async () => {
+    const res = await PATCH(peticion({ filename: "   " }), { params });
+
+    expect(res.status).toBe(400);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 al renombrar un documento que ya no existe", async () => {
+    query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+    const res = await PATCH(peticion({ filename: "nuevo.pdf" }), { params });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("manda a la papelera cuando el cuerpo trae papelera: true", async () => {
+    const res = await PATCH(peticion({ papelera: true }), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(typeof body.eliminado_at).toBe("string");
+    const [sql, valores] = query.mock.calls[0];
+    expect(sql).toContain("SET eliminado_at = $2");
+    expect(valores[0]).toBe(ID);
+    expect(valores[1]).toBeInstanceOf(Date);
+    expect(valores[2]).toBe(EMAIL_PRUEBA);
+  });
+
+  it("restaura cuando el cuerpo trae papelera: false", async () => {
+    const res = await PATCH(peticion({ papelera: false }), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.eliminado_at).toBeNull();
+    expect(query.mock.calls[0][1]).toEqual([ID, null, EMAIL_PRUEBA]);
+  });
+
+  it("devuelve 404 al mover a la papelera un documento que no es del usuario", async () => {
+    query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+    const res = await PATCH(peticion({ papelera: true }), { params });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("DELETE /api/documents/[id]", () => {
+  function peticionDelete() {
+    return new Request(`http://localhost:3000/api/documents/${ID}`, { method: "DELETE" });
+  }
+
+  it("borra el documento", async () => {
+    const res = await DELETE(peticionDelete(), { params });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("DELETE FROM documents"),
+      [ID, EMAIL_PRUEBA],
+    );
+  });
+
+  it("devuelve 404 si el documento ya no existe", async () => {
+    query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+    const res = await DELETE(peticionDelete(), { params });
 
     expect(res.status).toBe(404);
   });

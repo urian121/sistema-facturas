@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EMAIL_PRUEBA } from "./factories";
 
 const query = vi.fn();
 vi.mock("@/lib/db", () => ({ pool: { query } }));
+vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
 const { POST } = await import("@/app/api/upload/route");
 
@@ -46,6 +48,7 @@ describe("POST /api/upload", () => {
     expect(valores[1]).toBe("application/pdf");
     expect(valores[2]).toBe(1024);
     expect(Buffer.isBuffer(valores[3])).toBe(true);
+    expect(valores[4]).toBe(EMAIL_PRUEBA);
   });
 
   it("acepta también imágenes", async () => {

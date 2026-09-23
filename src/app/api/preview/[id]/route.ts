@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { esOffice, previsualizarOficina } from "@/lib/oficina";
+import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 
@@ -14,12 +15,17 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const usuarioEmail = await emailUsuarioActual();
+  if (!usuarioEmail) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   const { id } = await params;
   const tamano = new URL(request.url).searchParams.get("tamano") === "grande" ? "grande" : "chico";
 
   const { rows } = await pool.query(
-    `SELECT mime_type, data FROM documents WHERE id = $1`,
-    [id],
+    `SELECT mime_type, data FROM documents WHERE id = $1 AND usuario_email = $2`,
+    [id, usuarioEmail],
   );
   if (rows.length === 0) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });

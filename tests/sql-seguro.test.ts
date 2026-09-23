@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { EMAIL_PRUEBA } from "./factories";
 
 const query = vi.fn();
 const clienteQuery = vi.fn();
@@ -94,7 +95,7 @@ describe("ejecutarConsulta", () => {
   });
 
   it("corre en una transacción de sólo lectura y con tiempo límite", async () => {
-    await ejecutarConsulta("SELECT sum(total) AS total_facturado FROM registros");
+    await ejecutarConsulta("SELECT sum(total) AS total_facturado FROM registros", EMAIL_PRUEBA);
 
     const sqls = clienteQuery.mock.calls.map(([sql]) => sql);
     expect(sqls[0]).toBe("BEGIN READ ONLY");
@@ -103,15 +104,33 @@ describe("ejecutarConsulta", () => {
     expect(release).toHaveBeenCalled();
   });
 
+  it("fija el usuario de la sesión y tapa las tablas con vistas filtradas por él", async () => {
+    await ejecutarConsulta("SELECT sum(total) AS total_facturado FROM registros", EMAIL_PRUEBA);
+
+    const setConfig = clienteQuery.mock.calls.find(([sql]) => sql.includes("set_config"));
+    expect(setConfig?.[1]).toEqual([EMAIL_PRUEBA]);
+
+    const vistas = clienteQuery.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql: string) => sql.includes("CREATE TEMP VIEW"));
+    expect(vistas).toHaveLength(4);
+    for (const vista of vistas) {
+      expect(vista).toContain("current_setting('app.usuario_email', true)");
+    }
+  });
+
   it("envuelve la consulta para limitar las filas devueltas", async () => {
-    await ejecutarConsulta("SELECT * FROM registros");
+    await ejecutarConsulta("SELECT * FROM registros", EMAIL_PRUEBA);
 
     const ejecutada = clienteQuery.mock.calls.map(([sql]) => sql).find((s) => s.includes("LIMIT"));
     expect(ejecutada).toContain("SELECT * FROM (SELECT * FROM registros) AS consulta LIMIT 100");
   });
 
   it("devuelve columnas y filas", async () => {
-    const resultado = await ejecutarConsulta("SELECT sum(total) AS total_facturado FROM registros");
+    const resultado = await ejecutarConsulta(
+      "SELECT sum(total) AS total_facturado FROM registros",
+      EMAIL_PRUEBA,
+    );
 
     expect(resultado).toEqual({
       columnas: ["total_facturado"],
@@ -125,7 +144,9 @@ describe("ejecutarConsulta", () => {
       return { rows: [], fields: [] };
     });
 
-    await expect(ejecutarConsulta("SELECT iva FROM registros")).rejects.toThrow(/does not exist/);
+    await expect(
+      ejecutarConsulta("SELECT iva FROM registros", EMAIL_PRUEBA),
+    ).rejects.toThrow(/does not exist/);
     expect(clienteQuery.mock.calls.map(([sql]) => sql)).toContain("ROLLBACK");
     expect(release).toHaveBeenCalled();
   });

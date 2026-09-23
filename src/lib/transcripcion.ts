@@ -40,7 +40,7 @@ export async function transcribir(doc: {
       headers: cabeceras(apiKey),
       body: JSON.stringify({
         model: MODELO,
-        max_tokens: 8000,
+        max_completion_tokens: 8000,
         messages: [
           { role: "system", content: SYSTEM },
           {

@@ -71,14 +71,50 @@ export type Resultado = {
 const MAX_FILAS = 100;
 
 /**
- * Ejecuta la consulta en una transacción de sólo lectura y con tiempo límite,
- * de modo que ni un SELECT malicioso pueda escribir ni bloquear la base.
+ * Vistas temporales que tapan las tablas reales con la versión ya filtrada
+ * por dueño: el SQL que arma el modelo las referencia por su nombre normal
+ * (`documents`, `registros`, ...) sin saber que existen, así que no hace
+ * falta confiar en que él mismo acuerde filtrar por usuario — ni siquiera
+ * puede evitarlo. `current_setting` (no un literal) porque el valor no se
+ * puede parametrizar dentro de un `CREATE VIEW`; son vistas de sesión
+ * (`pg_temp`), y la transacción siempre se deshace, así que no sobreviven
+ * para la siguiente vez que el pool reutilice esta conexión.
  */
-export async function ejecutarConsulta(sql: string): Promise<Resultado> {
+const PROPIO_Y_ACTIVO = `d.usuario_email = current_setting('app.usuario_email', true)
+      AND d.eliminado_at IS NULL`;
+
+const VISTAS_POR_USUARIO = [
+  `CREATE TEMP VIEW documents AS
+     SELECT d.* FROM public.documents d
+      WHERE ${PROPIO_Y_ACTIVO}`,
+  `CREATE TEMP VIEW registros AS
+     SELECT r.* FROM public.registros r
+     JOIN public.documents d ON d.id = r.document_id
+    WHERE ${PROPIO_Y_ACTIVO}`,
+  `CREATE TEMP VIEW registro_lineas AS
+     SELECT rl.* FROM public.registro_lineas rl
+     JOIN public.registros r ON r.id = rl.registro_id
+     JOIN public.documents d ON d.id = r.document_id
+    WHERE ${PROPIO_Y_ACTIVO}`,
+  `CREATE TEMP VIEW registro_contratos AS
+     SELECT rc.* FROM public.registro_contratos rc
+     JOIN public.registros r ON r.id = rc.registro_id
+     JOIN public.documents d ON d.id = r.document_id
+    WHERE ${PROPIO_Y_ACTIVO}`,
+];
+
+/**
+ * Ejecuta la consulta en una transacción de sólo lectura y con tiempo límite,
+ * de modo que ni un SELECT malicioso pueda escribir ni bloquear la base; las
+ * vistas temporales de arriba hacen que, además, sólo vea lo del usuario dado.
+ */
+export async function ejecutarConsulta(sql: string, usuarioEmail: string): Promise<Resultado> {
   const cliente = await pool.connect();
   try {
     await cliente.query("BEGIN READ ONLY");
     await cliente.query("SET LOCAL statement_timeout = '5s'");
+    await cliente.query("SELECT set_config('app.usuario_email', $1, true)", [usuarioEmail]);
+    for (const vista of VISTAS_POR_USUARIO) await cliente.query(vista);
 
     const { rows, fields } = await cliente.query(`SELECT * FROM (${sql}) AS consulta LIMIT ${MAX_FILAS}`);
 

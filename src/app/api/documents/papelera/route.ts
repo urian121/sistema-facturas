@@ -5,7 +5,7 @@ import { emailUsuarioActual } from "@/lib/usuario-actual";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Historial activo del usuario; lo usa el cliente para refrescarse tras restaurar de la papelera. */
+/** Documentos en la papelera del usuario, del más recién eliminado al más antiguo. */
 export async function GET() {
   const usuarioEmail = await emailUsuarioActual();
   if (!usuarioEmail) {
@@ -13,13 +13,13 @@ export async function GET() {
   }
 
   const { rows } = await pool.query(
-    `SELECT id, filename, mime_type, size_bytes, created_at, doc_type, extraction
+    `SELECT id, filename, mime_type, size_bytes, eliminado_at
        FROM documents
       WHERE usuario_email = $1
-        AND eliminado_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 50`,
+        AND eliminado_at IS NOT NULL
+      ORDER BY eliminado_at DESC`,
     [usuarioEmail],
   );
+
   return NextResponse.json(rows);
 }

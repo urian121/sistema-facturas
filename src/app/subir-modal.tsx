@@ -4,23 +4,17 @@ import { useRef, useState } from "react";
 import { IconoAviso, IconoQuitar, IconoSubir } from "./iconos";
 import Tooltip from "./tooltip";
 import { useEscapeKey } from "./use-escape-key";
-import { MIME_OFICINA } from "@/lib/mime-oficina";
-
-const ACCEPT = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  ...Object.values(MIME_OFICINA),
-].join(",");
 
 export default function SubirModal({
   subiendo,
+  tiposPermitidos,
+  maxMB,
   onCerrar,
   onArchivo,
 }: {
   subiendo: boolean;
+  tiposPermitidos: string[];
+  maxMB: number;
   onCerrar: () => void;
   onArchivo: (file: File) => void;
 }) {
@@ -33,14 +27,14 @@ export default function SubirModal({
   /** El navegador deja soltar cualquier cosa: el filtro vive aquí, no en el accept. */
   const aceptar = (file: File | undefined) => {
     if (!file) return;
-    if (!ACCEPT.split(",").includes(file.type)) {
+    if (!tiposPermitidos.includes(file.type)) {
       setRechazo(
         `${file.name} es un ${file.type || "tipo desconocido"}: sólo entran imágenes, PDF, Word, Excel y PowerPoint.`,
       );
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      setRechazo(`${file.name} pesa más de 20 MB.`);
+    if (file.size > maxMB * 1024 * 1024) {
+      setRechazo(`${file.name} pesa más de ${maxMB} MB.`);
       return;
     }
     setRechazo(null);
@@ -79,7 +73,7 @@ export default function SubirModal({
           <input
             ref={inputRef}
             type="file"
-            accept={ACCEPT}
+            accept={tiposPermitidos.join(",")}
             className="sr-only"
             onChange={(e) => {
               aceptar(e.target.files?.[0]);
@@ -103,7 +97,7 @@ export default function SubirModal({
             disabled={subiendo}
             className={`flex w-full cursor-pointer flex-col items-center justify-center gap-2.5 rounded-lg border-2 border-dashed px-6 py-10 text-center transition ${
               dentro
-                ? "border-accent bg-accent-soft"
+                ? "border-accent-strong bg-accent-soft"
                 : "border-line bg-sunken hover:border-line-strong"
             } disabled:cursor-not-allowed disabled:opacity-60`}
           >
@@ -112,7 +106,7 @@ export default function SubirModal({
               {subiendo ? "Subiendo…" : "Arrastra el documento aquí o haz clic para elegirlo"}
             </span>
             <span className="text-[12px] text-label">
-              Factura, recibo o contrato · imagen, PDF, Word, Excel o PowerPoint · hasta 20 MB
+              Factura, recibo o contrato · imagen, PDF, Word, Excel o PowerPoint · hasta {maxMB} MB
             </span>
           </button>
 

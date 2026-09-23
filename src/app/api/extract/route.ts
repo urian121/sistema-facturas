@@ -4,6 +4,7 @@ import { pool } from "@/lib/db";
 import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 import { esOffice, extraerTextoOficina } from "@/lib/oficina";
+import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -34,6 +35,11 @@ function parseJsonLoose(raw: string): unknown {
 }
 
 export async function POST(request: Request) {
+  const usuarioEmail = await emailUsuarioActual();
+  if (!usuarioEmail) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   const { id } = await request.json().catch(() => ({ id: null }));
   if (typeof id !== "string") {
     return NextResponse.json({ error: "Falta el id del documento" }, { status: 400 });
@@ -48,8 +54,9 @@ export async function POST(request: Request) {
   }
 
   const { rows } = await pool.query(
-    `SELECT filename, mime_type, data FROM documents WHERE id = $1`,
-    [id],
+    `SELECT filename, mime_type, data FROM documents
+      WHERE id = $1 AND usuario_email = $2 AND eliminado_at IS NULL`,
+    [id, usuarioEmail],
   );
   if (rows.length === 0) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
@@ -91,7 +98,7 @@ export async function POST(request: Request) {
       { role: "system", content: SYSTEM },
       { role: "user", content: parts },
     ],
-    max_tokens: 8000,
+    max_completion_tokens: 8000,
     // Structured outputs: el modelo está obligado a respetar el esquema.
     response_format: {
       type: "json_schema",
@@ -178,8 +185,8 @@ export async function POST(request: Request) {
   await pool.query(
     `UPDATE documents
         SET doc_type = $2, extraction = $3, extracted_at = now()
-      WHERE id = $1`,
-    [id, extraccion.tipo_documento, JSON.stringify(extraccion)],
+      WHERE id = $1 AND usuario_email = $4`,
+    [id, extraccion.tipo_documento, JSON.stringify(extraccion), usuarioEmail],
   );
 
   return NextResponse.json({
