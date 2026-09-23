@@ -114,7 +114,7 @@ export default function Chat({
         },
       ]);
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     } finally {
       setPensando(false);
     }
@@ -169,7 +169,7 @@ export default function Chat({
                       key={e}
                       type="button"
                       onClick={() => preguntar(e)}
-                      className="cursor-pointer rounded-md border border-line px-2.5 py-1.5 text-left text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken"
+                      className="cursor-pointer rounded-md bg-sunken px-2.5 py-1.5 text-left text-[13px] text-ink-soft transition hover:bg-line hover:text-ink"
                     >
                       {e}
                     </button>
@@ -249,7 +249,7 @@ export default function Chat({
             placeholder={
               hayDocumentos ? "Escribe tu pregunta…" : "Aún no hay nada archivado"
             }
-            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-accent-strong focus:ring-2 focus:ring-accent-strong/15 disabled:opacity-60"
+            className="min-w-0 flex-1 rounded-md border border-transparent bg-sunken px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label focus:border-accent-strong/35 focus:bg-surface disabled:opacity-60"
           />
           <Tooltip etiqueta="Enviar pregunta" posicion="top" className="shrink-0">
             <button

@@ -1,26 +1,84 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { pool } from "@/lib/db";
-import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
+import { ExtraccionBrutaSchema, normalizarFecha, validarExtraccion } from "@/lib/schemas";
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 import { esOffice, extraerTextoOficina } from "@/lib/oficina";
+import { extraerTextoPdf } from "@/lib/pdf-texto";
 import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const SYSTEM = `Eres un extractor de datos de documentos. Recibes la imagen, el PDF, o el
-texto extraído de un documento Word/Excel/PowerPoint, y devuelves únicamente sus datos
-estructurados en JSON.
+const SYSTEM = `Eres un analista de documentos. Recibes una imagen, un PDF, o el texto
+extraído de un Word/Excel/PowerPoint, y devuelves en JSON qué es y los datos que contiene.
 
-- Clasifica el documento como factura, recibo, contrato u otro.
-- Copia los valores tal como aparecen; no inventes datos que no estén en el documento.
-- Usa null en cualquier campo que el documento no contenga o que no puedas leer con certeza.
-- Los importes van como números, sin símbolo de moneda ni separadores de miles.
-- El campo "contrato" sólo se rellena cuando tipo_documento es "contrato"; si no, va null.
-- Anota en "notas" cualquier campo ilegible o ambiguo.`;
+1. Clasifica en tipo_documento con criterio estricto:
+   - "factura": documento que cobra algo (número de factura, emisor, importes a pagar).
+   - "recibo": justificante de un pago ya hecho (ticket, comprobante, recibo).
+   - "contrato": acuerdo entre partes con cláusulas u obligaciones.
+   - "otro": TODO lo demás — un currículum, un ensayo, un informe, una carta, una
+     presentación, una hoja de cálculo cualquiera, o una fotografía (una persona, un
+     perro, un coche, una casa, un paisaje…). En la duda, "otro".
+2. En "categoria" di qué es exactamente, en pocas palabras y en español ("Factura de
+   luz", "Currículum vitae", "Ensayo académico", "Fotografía de un gato",
+   "Presupuesto de obra"…). Siempre rellénala.
+3. En "resumen", una frase que describa el contenido real (para una foto, qué se ve).
+4. Rellena SOLO los campos que el documento contiene de verdad. Emisor, receptor,
+   número, fechas, moneda, importes, forma de pago y líneas son de documentos
+   comerciales: en un "otro" van a null (o vacíos) salvo que aparezcan de forma
+   explícita con ese sentido. No uses el nombre de la persona de un CV como "emisor"
+   ni su ciudad como "dirección"; no inventes ni deduzcas.
+5. En "datos_clave" recoge TODO lo que el documento contiene y no tiene campo
+   propio: no hay un número máximo, no resumas ni agrupes con palabras tuyas, y no
+   cambies una lista por una descripción ("Front-end, back-end…" está mal si el
+   documento enumera HTML, CSS, React…). Copia cada lista completa, en el orden y con
+   los nombres del documento. Un dato por cada elemento con identidad propia: cada
+   empleo, cada título, cada certificado, cada perfil o enlace es un dato aparte, con
+   una etiqueta que diga de qué sección sale ("Experiencia · EDUMEDIA TECH" →
+   "Coordinador de Desarrollo · 2025"). Las listas cortas de una misma sección van en
+   un solo dato, con sus elementos separados por comas ("Habilidades back-end" →
+   "PHP, Laravel, Python…"). Ejemplos de qué buscar: en un CV, datos de contacto,
+   perfil, cada formación, cada experiencia, cada grupo de habilidades, idiomas,
+   proyectos o publicaciones; en un documento de identidad (pasaporte, cédula,
+   permiso), titular, número, nacionalidad, nacimiento, expedición y vencimiento; en
+   una foto, qué se ve y los textos visibles. Etiqueta corta en español. En
+   facturas, recibos y contratos, sólo lo que no quepa en los otros campos (puede
+   ir vacío).
+6. Formato de los valores: importes como números, sin símbolo de moneda ni
+   separadores de miles; TODA fecha en AAAA-MM-DD, también dentro de datos_clave
+   (un documento que pone "25 JUN/JUN 1986" es "1986-06-25"). El resto, tal como
+   aparece.
+7. "contrato" sólo se rellena cuando tipo_documento es "contrato"; si no, null.
+8. "notas" es sólo para dudas: un dato ilegible, ambiguo o que no se pudo
+   interpretar con seguridad. Nunca pongas ahí un dato leído con claridad: eso va en
+   su campo o en datos_clave.
+9. Audita el documento entero antes de responder: recórrelo página por página y
+   sección por sección, de arriba abajo y en todas las columnas, y comprueba que
+   cada bloque de información ha quedado recogido en algún campo. No des nada por
+   sentado ni completes con lo que "suele" poner: si no está escrito, no existe; si
+   está escrito, tiene que aparecer. Si te llega también el texto extraído del
+   documento, úsalo para verificar que no te saltas nada y para copiar con
+   exactitud, pero manda lo que se ve en el documento.`;
 
-const jsonSchema = z.toJSONSchema(ExtraccionBrutaSchema.omit({ texto: true }));
+/**
+ * OpenAI en modo `strict` no admite la palabra clave `default` (la ponen los
+ * `.default()` de los campos nuevos del esquema, para leer análisis antiguos):
+ * se quita de la copia que se le manda. Los campos siguen en `required`.
+ */
+function sinDefaults(nodo: unknown): unknown {
+  if (Array.isArray(nodo)) return nodo.map(sinDefaults);
+  if (nodo && typeof nodo === "object") {
+    return Object.fromEntries(
+      Object.entries(nodo)
+        .filter(([clave]) => clave !== "default")
+        .map(([clave, valor]) => [clave, sinDefaults(valor)]),
+    );
+  }
+  return nodo;
+}
+
+const jsonSchema = sinDefaults(z.toJSONSchema(ExtraccionBrutaSchema.omit({ texto: true })));
 
 type ContentPart =
   | { type: "text"; text: string }
@@ -78,14 +136,30 @@ export async function POST(request: Request) {
     parts = [
       {
         type: "text",
-        text: `Extrae los datos de este documento (archivo: ${doc.filename}).\n\nContenido:\n${texto}`,
+        text: `Analiza este documento (archivo: ${doc.filename}).\n\nContenido:\n${texto}`,
       },
     ];
   } else {
     const dataUrl = `data:${doc.mime_type};base64,${doc.data.toString("base64")}`;
     const isPdf = doc.mime_type === "application/pdf";
+    // En un PDF de varias páginas el modelo tiende a quedarse con la primera:
+    // se le dice cuántas son y se le da el texto real de cada una para que
+    // compruebe que no se deja ninguna (ver `src/lib/pdf-texto.ts`).
+    const textoPdf = isPdf ? await extraerTextoPdf(doc.data) : null;
+    const instruccion = textoPdf
+      ? [
+          `Analiza este documento (archivo: ${doc.filename}). Tiene ${textoPdf.paginas} ${
+            textoPdf.paginas === 1 ? "página" : "páginas"
+          }: revísalas todas.`,
+          "",
+          `Texto extraído del PDF, página por página${
+            textoPdf.recortado ? " (recortado: el documento es más largo, revisa el PDF entero)" : ""
+          }:`,
+          textoPdf.texto,
+        ].join("\n")
+      : `Analiza este documento (archivo: ${doc.filename}).`;
     parts = [
-      { type: "text", text: `Extrae los datos de este documento (archivo: ${doc.filename}).` },
+      { type: "text", text: instruccion },
       isPdf
         ? { type: "file", file: { filename: doc.filename, file_data: dataUrl } }
         : { type: "image_url", image_url: { url: dataUrl } },
@@ -98,7 +172,8 @@ export async function POST(request: Request) {
       { role: "system", content: SYSTEM },
       { role: "user", content: parts },
     ],
-    max_completion_tokens: 8000,
+    // Holgado: sin tope de datos, un documento de varias páginas da mucha salida.
+    max_completion_tokens: 16000,
     // Structured outputs: el modelo está obligado a respetar el esquema.
     response_format: {
       type: "json_schema",
@@ -177,7 +252,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const extraccion = validado.data;
+  // Las fechas de los datos encontrados, siempre en AAAA-MM-DD (el modelo a
+  // veces las copia tal como vienen en el documento).
+  const extraccion = {
+    ...validado.data,
+    datos_clave: validado.data.datos_clave.map((d) => ({ ...d, valor: normalizarFecha(d.valor) })),
+  };
   // Las reglas por tipo (fechas, obligatorios, cuadre) no bloquean el guardado:
   // se devuelven para que el formulario las marque en rojo y se puedan corregir.
   const validacion = validarExtraccion(extraccion);

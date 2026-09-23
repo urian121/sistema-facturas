@@ -63,6 +63,18 @@ errores. Cada push a `master` despliega a producción (ver "Despliegue" en
   nunca `rounded-md`/`rounded-lg`. Quedan fuera los botones-icono del riel y
   del encabezado, las tarjetas/zonas clicables (zona de subida, sugerencias
   del chat) y las filas de menú.
+- **Prohibido el contorno gris `border border-line`** (ni partido en dos, tipo
+  `border` + `border-line` por separado) alrededor de cajas, inputs, botones,
+  tarjetas, modales o menús. Lo que separa cada cosa es el fondo:
+  - inputs, selects y botones secundarios → relleno `bg-sunken` con
+    `border border-transparent`, y borde de color sólo al enfocar
+    (`focus:border-accent-strong/35 focus:bg-surface`) o con error;
+  - tarjetas y filas → `bg-surface` sobre `bg-app`/`bg-sunken` (o al revés);
+  - modales, menús y popovers → su sombra, sin borde.
+  Siguen permitidos los divisores de una sola cara (`border-b`/`border-t`
+  `border-line`, `divide-line`), los bordes de estado (`border-accent-strong`,
+  `border-warn`, `border-danger`…) y el punteado de las zonas para soltar
+  archivos.
 
 ### Tests
 

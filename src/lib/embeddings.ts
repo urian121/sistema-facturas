@@ -47,7 +47,9 @@ export function trocear(texto: string, tamano = TAMANO_CHUNK, solape = SOLAPE): 
  */
 export function textoDeRespaldo(datos: Extraccion): string {
   const partes = [
+    datos.categoria,
     datos.resumen,
+    ...(datos.datos_clave ?? []).map((d) => `${d.etiqueta}: ${d.valor}`),
     datos.emisor.nombre && `Emisor: ${datos.emisor.nombre} ${datos.emisor.identificacion_fiscal ?? ""}`,
     datos.receptor.nombre &&
       `Receptor: ${datos.receptor.nombre} ${datos.receptor.identificacion_fiscal ?? ""}`,
@@ -79,9 +81,18 @@ export async function embeber(textos: string[]): Promise<number[][]> {
   const payload = await res.json().catch(() => null);
 
   if (!res.ok) {
-    throw new Error(
-      `No se pudieron generar los embeddings (${res.status}): ${payload?.error?.message ?? res.statusText}`,
-    );
+    const detalle: string = payload?.error?.message ?? res.statusText;
+    // El caso típico: la clave pertenece a un proyecto de OpenAI con la lista
+    // de modelos restringida. No es un fallo de la app, es un permiso de la
+    // cuenta, así que se explica cómo darlo en vez de enseñar el texto crudo.
+    if (res.status === 403 && /does not have access to model/i.test(detalle)) {
+      throw new Error(
+        `Tu proyecto de OpenAI no tiene permiso para usar el modelo ${MODELO_EMBEDDINGS}. ` +
+          "Actívalo en platform.openai.com → Settings → Project → Limits (modelos permitidos), " +
+          "o cambia OPENAI_EMBEDDING_MODEL por uno de 1536 dimensiones que sí esté permitido.",
+      );
+    }
+    throw new Error(`No se pudieron generar los embeddings (${res.status}): ${detalle}`);
   }
 
   const datos = payload?.data;

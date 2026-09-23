@@ -1,5 +1,6 @@
 import { CHAT_URL, MODELO, cabeceras, claveOpenAI } from "@/lib/openai";
 import { esOffice, extraerTextoOficina } from "@/lib/oficina";
+import { extraerTextoPdf } from "@/lib/pdf-texto";
 
 const SYSTEM = `Transcribes documentos. Devuelves únicamente el texto visible del
 documento, literal y en orden de lectura, sin resumirlo, sin reordenarlo y sin añadir
@@ -26,6 +27,13 @@ export async function transcribir(doc: {
     } catch {
       return null;
     }
+  }
+
+  // Un PDF con capa de texto también la trae exacta, de todas las páginas.
+  // Sólo los escaneados (sin texto) o los que no caben enteros pasan al modelo.
+  if (doc.mime_type === "application/pdf") {
+    const pdf = await extraerTextoPdf(doc.data);
+    if (pdf && !pdf.recortado) return pdf.texto;
   }
 
   const apiKey = claveOpenAI();

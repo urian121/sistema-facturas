@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
-import { EMAIL_PRUEBA, facturaValida } from "./factories";
+import { EMAIL_PRUEBA, base, facturaValida, pdfDePrueba } from "./factories";
 import { MIME_OFICINA } from "@/lib/mime-oficina";
 import type { Extraccion } from "@/lib/schemas";
 
@@ -85,6 +85,41 @@ describe("POST /api/extract", () => {
     expect(body.extraction.texto).toBeNull();
   });
 
+  it("pide categoría y datos encontrados como obligatorios, sin la palabra clave default", async () => {
+    fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
+
+    await POST(peticion());
+
+    const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const esquema = enviado.response_format.json_schema.schema;
+    expect(esquema.required).toEqual(expect.arrayContaining(["categoria", "datos_clave"]));
+    // OpenAI en modo strict rechaza `default`, aunque Zod lo ponga por los `.default()`.
+    expect(JSON.stringify(esquema)).not.toContain('"default"');
+    // El prompt manda a "otro" todo lo que no es comercial (CV, fotos…).
+    expect(enviado.messages[0].content).toMatch(/currículum/i);
+  });
+
+  it("acepta un documento cualquiera clasificado como otro, con sus datos encontrados", async () => {
+    const cv = {
+      ...base(),
+      categoria: "Currículum vitae",
+      resumen: "Currículum de un ingeniero de sistemas",
+      datos_clave: [
+        { etiqueta: "Nombre", valor: "Urian Viera" },
+        { etiqueta: "Profesión", valor: "Ingeniero de Sistemas" },
+      ],
+    };
+    fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(cv)));
+
+    const res = await POST(peticion());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.extraction.categoria).toBe("Currículum vitae");
+    expect(body.extraction.datos_clave).toHaveLength(2);
+    expect(body.validacion.valido).toBe(true);
+  });
+
   it("manda el PDF como parte file, con el archivo embebido en base64", async () => {
     fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(facturaValida())));
 
@@ -97,6 +132,33 @@ describe("POST /api/extract", () => {
     expect(parteArchivo).toBeDefined();
     expect(parteArchivo.file.file_data).toMatch(/^data:application\/pdf;base64,/);
     expect(enviado.response_format.json_schema.strict).toBe(true);
+  });
+
+  it("con un PDF de varias páginas, dice cuántas son y adjunta el texto de cada una", async () => {
+    query.mockReset();
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            filename: "cv.pdf",
+            mime_type: "application/pdf",
+            data: pdfDePrueba(["Experiencia laboral", "Habilidades DevOps"]),
+          },
+        ],
+      })
+      .mockResolvedValue({ rowCount: 1, rows: [] });
+    fetchMock.mockResolvedValue(respuestaModelo(JSON.stringify(base())));
+
+    await POST(peticion());
+
+    const enviado = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const [instruccion, archivo] = enviado.messages[1].content;
+    expect(instruccion.text).toContain("Tiene 2 páginas: revísalas todas");
+    expect(instruccion.text).toContain("--- Página 2 de 2 ---\nHabilidades DevOps");
+    expect(archivo.type).toBe("file");
+    // Sin tope de datos: el prompt pide recoger todo y auditar página por página.
+    expect(enviado.messages[0].content).toMatch(/no hay un número máximo/);
+    expect(enviado.messages[0].content).toMatch(/página por página/);
   });
 
   it("manda las imágenes como image_url", async () => {

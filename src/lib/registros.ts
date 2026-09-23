@@ -5,6 +5,8 @@ export type Registro = {
   document_id: string;
   filename: string;
   tipo_documento: string;
+  /** Qué es exactamente ("Currículum vitae"…); sale del análisis guardado, no de `registros`. */
+  categoria: string | null;
   numero_documento: string | null;
   fecha_emision: string | null;
   emisor_nombre: string | null;
@@ -21,6 +23,7 @@ const CONSULTA = `
          r.document_id,
          d.filename,
          r.tipo_documento,
+         COALESCE(r.categoria, d.extraction->>'categoria') AS categoria,
          r.numero_documento,
          to_char(r.fecha_emision, 'YYYY-MM-DD') AS fecha_emision,
          r.emisor_nombre,

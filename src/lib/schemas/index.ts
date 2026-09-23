@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { problemaCuadre, problemaOrden, type Problema } from "./base";
+import { problemaCuadre, problemaOrden, problemaSumaLineas, type Problema } from "./base";
 import { SCHEMAS, TIPOS, type TipoDocumento } from "./tipos";
 
 export {
@@ -13,7 +13,7 @@ export {
   OtroSchema,
   type TipoDocumento,
 } from "./tipos";
-export { esFechaISO, TOLERANCIA } from "./base";
+export { esFechaISO, normalizarFecha, resumenLineas, TOLERANCIA } from "./base";
 
 /**
  * Forma laxa que se le pide al modelo: todos los campos presentes, casi todos
@@ -25,6 +25,22 @@ export const ExtraccionBrutaSchema = z.object({
   confianza: z.number().describe("Confianza en la clasificación, de 0 a 1"),
   idioma: z.string().nullable(),
   resumen: z.string().describe("Una frase describiendo el documento"),
+  // `.default()` en los dos campos nuevos: los análisis guardados antes de que
+  // existieran siguen siendo válidos (se rellenan al leerlos). Para el modelo
+  // siguen siendo obligatorios: `toJSONSchema` los pone en `required`.
+  categoria: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe(
+      "Qué es exactamente, en pocas palabras y en español: 'Factura de luz', 'Currículum vitae', 'Ensayo académico', 'Fotografía de un perro', 'Captura de pantalla'…",
+    ),
+  datos_clave: z
+    .array(z.object({ etiqueta: z.string(), valor: z.string() }))
+    .default([])
+    .describe(
+      "TODOS los datos que aparecen en el documento y no tienen campo propio en este esquema, de todas las páginas, sin resumir; etiqueta corta en español y valor tal como aparece",
+    ),
 
   emisor: z
     .object({
@@ -103,7 +119,7 @@ function cruzadas(datos: Extraccion): Problema[] {
   const lista: (Problema | null)[] = [];
 
   if (tipo === "factura" || tipo === "recibo") {
-    lista.push(problemaCuadre(datos));
+    lista.push(problemaCuadre(datos), problemaSumaLineas(datos));
   }
   if (tipo === "factura") {
     lista.push(

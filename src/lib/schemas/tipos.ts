@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  datoClave,
   detalleContrato,
   emitir,
   fecha,
@@ -10,6 +11,7 @@ import {
   parte,
   problemaCuadre,
   problemaOrden,
+  problemaSumaLineas,
   textoRequerido,
 } from "./base";
 
@@ -18,6 +20,9 @@ const comunes = {
   confianza: z.number().min(0).max(1),
   idioma: z.string().nullable(),
   resumen: textoRequerido("El resumen"),
+  // `.default()`: un análisis guardado antes de estos campos se valida igual.
+  categoria: z.string().nullable().default(null),
+  datos_clave: z.array(datoClave).default([]),
   numero_documento: z.string().nullable(),
   fecha_vencimiento: fechaOpcional,
   metodo_pago: z.string().nullable(),
@@ -25,13 +30,15 @@ const comunes = {
   texto: z.string().nullable(),
 };
 
-/** Factura: identifica a las dos partes, lleva número y debe cuadrar. */
+/** Factura: identifica al emisor, lleva número y líneas, y debe cuadrar. */
 export const FacturaSchema = z
   .object({
     ...comunes,
     tipo_documento: z.literal("factura"),
     emisor: parte(true, "del emisor"),
-    receptor: parte(true, "del receptor"),
+    // Opcional: las facturas simplificadas y las de "consumidor final" no
+    // identifican al cliente, y exigirlo obligaba a inventarse un nombre.
+    receptor: parte(false, "del receptor"),
     numero_documento: textoRequerido("El número de factura"),
     fecha_emision: fecha,
     moneda,
@@ -43,6 +50,7 @@ export const FacturaSchema = z
   })
   .superRefine((datos, ctx) => {
     emitir(problemaCuadre(datos), ctx);
+    emitir(problemaSumaLineas(datos), ctx);
     emitir(
       problemaOrden(
         datos.fecha_emision,
@@ -71,6 +79,7 @@ export const ReciboSchema = z
   })
   .superRefine((datos, ctx) => {
     emitir(problemaCuadre(datos), ctx);
+    emitir(problemaSumaLineas(datos), ctx);
   });
 
 /** Contrato: dos partes, objeto y vigencia; sin aritmética de importes. */
@@ -104,7 +113,11 @@ export const ContratoSchema = z
     );
   });
 
-/** Otro: no imponemos más que un resumen legible. */
+/**
+ * Otro: cualquier cosa que no sea factura, recibo ni contrato (un CV, un
+ * ensayo, una foto…). Sólo se exige el resumen; lo que tenga de interés va
+ * en `categoria` y `datos_clave`, no en los campos de factura.
+ */
 export const OtroSchema = z.object({
   ...comunes,
   tipo_documento: z.literal("otro"),

@@ -10,6 +10,8 @@ export function base(): Extraccion {
     confianza: 0.9,
     idioma: "es",
     resumen: "Documento de prueba",
+    categoria: null,
+    datos_clave: [],
     emisor: { nombre: null, identificacion_fiscal: null, direccion: null },
     receptor: { nombre: null, identificacion_fiscal: null, direccion: null },
     numero_documento: null,
@@ -74,7 +76,11 @@ export function reciboValido(): Extraccion {
     impuestos: 2.66,
     total: 29.26,
     metodo_pago: "Tarjeta",
-    lineas: [{ descripcion: "Leche entera 1L", cantidad: 3, precio_unitario: 1.15, importe: 3.45 }],
+    // Las líneas suman la base imponible (26,60), como en un ticket completo.
+    lineas: [
+      { descripcion: "Leche entera 1L", cantidad: 3, precio_unitario: 1.15, importe: 3.45 },
+      { descripcion: "Compra variada", cantidad: 1, precio_unitario: 23.15, importe: 23.15 },
+    ],
   };
 }
 
@@ -109,4 +115,36 @@ export function contratoValido(): Extraccion {
 /** Campos con problemas, ordenados, para comparar sin depender del orden. */
 export function campos(problemas: { campo: string }[]): string[] {
   return [...new Set(problemas.map((p) => p.campo))].sort();
+}
+
+/**
+ * PDF mínimo, válido y con capa de texto: una página por cadena. Sirve para
+ * probar la lectura de texto de PDFs sin guardar archivos binarios en el repo.
+ */
+export function pdfDePrueba(paginas: string[]): Buffer {
+  const objetos: string[] = [];
+  const hojas = paginas.map((_, i) => 3 + i * 2);
+  objetos.push("<</Type/Catalog/Pages 2 0 R>>");
+  objetos.push(`<</Type/Pages/Kids[${hojas.map((n) => `${n} 0 R`).join(" ")}]/Count ${paginas.length}>>`);
+  const fuente = 3 + paginas.length * 2;
+  paginas.forEach((texto, i) => {
+    const flujo = `BT /F1 12 Tf 20 250 Td (${texto}) Tj ET`;
+    objetos.push(
+      `<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 300]/Contents ${hojas[i] + 1} 0 R/Resources<</Font<</F1 ${fuente} 0 R>>>>>>`,
+    );
+    objetos.push(`<</Length ${flujo.length}>>stream\n${flujo}\nendstream`);
+  });
+  objetos.push("<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>");
+
+  let pdf = "%PDF-1.4\n";
+  const desplazamientos: number[] = [];
+  objetos.forEach((cuerpo, i) => {
+    desplazamientos.push(pdf.length);
+    pdf += `${i + 1} 0 obj${cuerpo}endobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n`;
+  pdf += desplazamientos.map((d) => `${String(d).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer<</Size ${objetos.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(pdf, "latin1");
 }

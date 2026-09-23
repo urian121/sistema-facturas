@@ -4,6 +4,7 @@ export const TABLAS_PERMITIDAS = [
   "registros",
   "registro_lineas",
   "registro_contratos",
+  "registro_datos",
   "documents",
 ] as const;
 
@@ -99,6 +100,11 @@ const VISTAS_POR_USUARIO = [
   `CREATE TEMP VIEW registro_contratos AS
      SELECT rc.* FROM public.registro_contratos rc
      JOIN public.registros r ON r.id = rc.registro_id
+     JOIN public.documents d ON d.id = r.document_id
+    WHERE ${PROPIO_Y_ACTIVO}`,
+  `CREATE TEMP VIEW registro_datos AS
+     SELECT rd.* FROM public.registro_datos rd
+     JOIN public.registros r ON r.id = rd.registro_id
      JOIN public.documents d ON d.id = r.document_id
     WHERE ${PROPIO_Y_ACTIVO}`,
 ];

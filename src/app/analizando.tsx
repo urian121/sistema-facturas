@@ -87,7 +87,7 @@ export default function Analizando({ filename }: { filename: string }) {
     >
       <div className="relative">
         <Esquinas />
-        <div className="relative h-52 w-40 overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-[0_16px_40px_-16px_rgba(36,36,36,0.35)]">
+        <div className="relative h-52 w-40 overflow-hidden rounded-xl bg-surface p-4 shadow-[0_16px_40px_-16px_rgba(36,36,36,0.35)]">
           <div className="mb-4 flex items-center justify-between">
             <span className="h-5 w-5 rounded-md bg-accent" />
             <span className="h-1.5 w-10 rounded-full bg-line-strong" />

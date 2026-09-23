@@ -115,7 +115,7 @@ export default function Notificaciones({
         notificar.ok("Invitación rechazada");
       }
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
       cargar();
     } finally {
       setRespondiendo(null);
@@ -151,7 +151,7 @@ export default function Notificaciones({
         <div
           role="dialog"
           aria-label="Notificaciones"
-          className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)]"
+          className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)]"
         >
           <p className="border-b border-line px-4 py-2.5 text-[13px] font-medium text-ink">
             Notificaciones

@@ -52,7 +52,7 @@ export default function SubirModal({
         role="dialog"
         aria-modal="true"
         aria-label="Subir documento"
-        className="entra relative w-full max-w-130 rounded-xl border border-line bg-surface shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)]"
+        className="entra relative w-full max-w-130 rounded-xl bg-surface shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)]"
       >
         <header className="flex h-12 items-center gap-3 border-b border-line px-4">
           <h2 className="text-[13px] font-medium">Subir documento</h2>

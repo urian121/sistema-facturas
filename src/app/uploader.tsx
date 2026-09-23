@@ -111,6 +111,10 @@ export default function Uploader({
   const [soltandoDoc, setSoltandoDoc] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  // Sube con cada análisis terminado: forma parte de la `key` del formulario,
+  // para que un "Volver a analizar" lo monte de cero (qué campos se ven, qué
+  // tipo detectó la IA) en vez de heredar el estado del análisis anterior.
+  const [versionAnalisis, setVersionAnalisis] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   // El resto de avisos son toasts; este es persistente porque explica por qué
@@ -145,7 +149,7 @@ export default function Uploader({
       setPanelMovil("documento");
       setSubirAbierto(false);
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
       setSubirAbierto(false);
     } finally {
       setUploading(false);
@@ -164,9 +168,10 @@ export default function Uploader({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "No se pudo analizar el documento");
         actualizar(id, { doc_type: data.doc_type, extraction: data.extraction });
+        setVersionAnalisis((v) => v + 1);
         setPanelMovil("datos");
       } catch (err) {
-        notificar.error(err instanceof Error ? err.message : "Error inesperado");
+        notificar.error(err);
       } finally {
         setAnalyzing(false);
       }
@@ -193,7 +198,7 @@ export default function Uploader({
       actualizar(selected.id, { doc_type: data.extraction.tipo_documento });
       notificar.ok("Borrador guardado");
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     } finally {
       setGuardando(false);
     }
@@ -214,13 +219,21 @@ export default function Uploader({
 
       actualizar(selected.id, { doc_type: selected.extraction.tipo_documento });
       await refrescarRegistros();
-      notificar.ok(
-        `Archivado · ${data.lineas} ${data.lineas === 1 ? "línea" : "líneas"} y ${data.chunks} ${
-          data.chunks === 1 ? "fragmento indexado" : "fragmentos indexados"
-        }`,
-      );
+      const partes = [
+        data.lineas > 0 && `${data.lineas} ${data.lineas === 1 ? "línea" : "líneas"}`,
+        data.datos > 0 && `${data.datos} ${data.datos === 1 ? "dato" : "datos"}`,
+        data.chunks > 0 &&
+          `${data.chunks} ${data.chunks === 1 ? "fragmento indexado" : "fragmentos indexados"}`,
+      ].filter(Boolean);
+      notificar.ok(partes.length > 0 ? `Archivado · ${partes.join(", ")}` : "Archivado");
+      // Archivado sí, pero sin búsqueda por significado: se dice por qué.
+      if (data.aviso) {
+        notificar.aviso(
+          `No se pudo indexar para la búsqueda por significado: ${data.aviso} Cuando lo resuelvas, pulsa "Volver a archivar".`,
+        );
+      }
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     } finally {
       setConfirmando(false);
     }
@@ -261,7 +274,7 @@ export default function Uploader({
         notificar.ok("Documento renombrado");
       } catch (err) {
         if (anterior !== undefined) actualizar(id, { filename: anterior });
-        notificar.error(err instanceof Error ? err.message : "Error inesperado");
+        notificar.error(err);
       }
     },
     [docs, actualizar],
@@ -285,7 +298,7 @@ export default function Uploader({
         if (selectedId === id) irAlInicio();
         notificar.ok("Documento movido a la papelera");
       } catch (err) {
-        notificar.error(err instanceof Error ? err.message : "Error inesperado");
+        notificar.error(err);
       }
     },
     [selectedId, irAlInicio],
@@ -299,7 +312,7 @@ export default function Uploader({
       if (!res.ok) throw new Error("No se pudo cargar la papelera");
       setPapeleraDocs(await res.json());
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     } finally {
       setPapeleraCargando(false);
     }
@@ -321,7 +334,7 @@ export default function Uploader({
       if (refresco.ok) setDocs(await refresco.json());
       notificar.ok("Documento restaurado");
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     }
   }, []);
 
@@ -335,7 +348,7 @@ export default function Uploader({
       setPapeleraDocs((prev) => prev.filter((d) => d.id !== id));
       notificar.ok("Documento eliminado para siempre");
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     }
   }, []);
 
@@ -350,7 +363,7 @@ export default function Uploader({
         `Papelera vaciada · ${n} ${n === 1 ? "documento eliminado" : "documentos eliminados"} para siempre`,
       );
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     }
   }, []);
 
@@ -527,7 +540,7 @@ export default function Uploader({
               )}
               {selected ? (
                 <>
-                  <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-2.5 text-[13px]">
+                  <div className="flex h-11 shrink-0 items-center gap-2 bg-surface px-2.5 text-[13px]">
                     <IconoDocumento className="h-3.5 w-3.5 shrink-0 text-label" />
                     <span className="min-w-0 flex-1 truncate">{selected.filename}</span>
                     <span className="cifra shrink-0 text-label">
@@ -553,7 +566,7 @@ export default function Uploader({
                       <object
                         data={`/api/files/${selected.id}`}
                         type="application/pdf"
-                        className="h-full min-h-[70vh] w-full rounded-lg border border-line bg-white"
+                        className="h-full min-h-[70vh] w-full rounded-lg bg-white"
                       >
                         <p className="p-6 text-[13px] text-ink-soft">
                           Tu navegador no puede mostrar el PDF.{" "}
@@ -651,12 +664,12 @@ export default function Uploader({
                 )
               ) : (
                 <div className="entra flex min-h-0 flex-1 flex-col">
-                  <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
+                  <div className="flex h-11 shrink-0 items-center gap-3 px-4">
                     <h2 className="text-[13px] font-medium">Datos extraídos</h2>
                     <button
                       onClick={() => analyze(selected.id)}
                       disabled={analyzing}
-                      className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-1 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:bg-surface"
+                      className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-full bg-sunken px-4 py-1 text-[13px] text-ink-soft transition hover:bg-line hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-sunken"
                     >
                       <IconoRecargar className={`h-3.5 w-3.5 ${analyzing ? "animate-spin" : ""}`} />
                       {analyzing ? "Analizando…" : "Volver a analizar"}
@@ -664,7 +677,7 @@ export default function Uploader({
                   </div>
 
                   <DatosForm
-                    key={selected.id}
+                    key={`${selected.id}-${versionAnalisis}`}
                     extraccion={selected.extraction}
                     confirmado={confirmado}
                     onChange={(siguiente) => actualizar(selected.id, { extraction: siguiente })}

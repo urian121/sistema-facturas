@@ -51,7 +51,7 @@ export default function OficinaVistaPrevia({
 
   if (error || !previa) {
     return (
-      <div className="flex h-full min-h-[50vh] flex-col items-center justify-center gap-3 rounded-lg border border-line bg-white p-8 text-center">
+      <div className="flex h-full min-h-[50vh] flex-col items-center justify-center gap-3 rounded-lg bg-white p-8 text-center">
         <IconoDocumento className="h-8 w-8 text-label" />
         <p className="text-[13px] text-ink-soft">
           {error ? "Este tipo de archivo no tiene vista previa." : "Cargando vista previa…"}
@@ -62,7 +62,7 @@ export default function OficinaVistaPrevia({
   }
 
   return (
-    <div className="flex h-full min-h-[50vh] flex-col gap-3 rounded-lg border border-line bg-white p-6">
+    <div className="flex h-full min-h-[50vh] flex-col gap-3 rounded-lg bg-white p-6">
       <div className="min-h-0 flex-1 overflow-auto">
         {previa.tipo === "hoja" ? (
           previa.filas.length === 0 ? (
@@ -73,7 +73,7 @@ export default function OficinaVistaPrevia({
                 {previa.filas.map((fila, i) => (
                   <tr key={i}>
                     {fila.map((celda, j) => (
-                      <td key={j} className="border border-line px-2 py-1">
+                      <td key={j} className="border-b border-line px-2 py-1">
                         {celda}
                       </td>
                     ))}

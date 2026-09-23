@@ -38,7 +38,10 @@ const importes: Seccion = {
 
 const resumen: Seccion = {
   titulo: "Resumen",
-  campos: [{ path: "resumen", label: "Resumen", tipo: "parrafo", ancho: "completo" }],
+  campos: [
+    { path: "categoria", label: "Qué es", tipo: "texto", ancho: "completo" },
+    { path: "resumen", label: "Resumen", tipo: "parrafo", ancho: "completo" },
+  ],
 };
 
 export const SECCIONES: Record<TipoDocumento, Seccion[]> = {
@@ -102,6 +105,14 @@ export const SECCIONES: Record<TipoDocumento, Seccion[]> = {
   ],
 };
 
+/**
+ * Campos candidatos de cada tipo, no una plantilla fija: el formulario sólo
+ * pinta los que traen valor, los obligatorios que faltan (tienen error) y
+ * los que el usuario añade a mano con "Añadir campo". Así un CV clasificado
+ * como "otro" no enseña base imponible ni NIF vacíos.
+ */
+export const SIEMPRE_VISIBLES = new Set(["resumen"]);
+
 /** Los contratos no usan la tabla de líneas. */
 export const MUESTRA_LINEAS: Record<TipoDocumento, boolean> = {
   factura: true,
@@ -109,6 +120,14 @@ export const MUESTRA_LINEAS: Record<TipoDocumento, boolean> = {
   contrato: false,
   otro: true,
 };
+
+/** ¿Trae algo? `null`, `undefined`, cadena vacía y listas vacías cuentan como nada. */
+export function tieneValor(valor: unknown): boolean {
+  if (valor === null || valor === undefined) return false;
+  if (typeof valor === "string") return valor.trim() !== "";
+  if (Array.isArray(valor)) return valor.length > 0;
+  return true;
+}
 
 export function leer(objeto: unknown, path: string): unknown {
   return path

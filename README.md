@@ -174,6 +174,15 @@ Las imágenes viajan como `image_url` en base64; los PDFs como parte `file` con 
 archivo embebido en base64 (`file_data`), que OpenAI procesa de forma nativa,
 incluidos los escaneados.
 
+Con un PDF de varias páginas el modelo tendía a quedarse con la primera y a
+resumir el resto. Por eso, además del archivo, se le manda **el texto real de
+cada página** (`src/lib/pdf-texto.ts`, con `pdfjs-dist` en el servidor —declarado
+en `serverExternalPackages`—), junto con cuántas páginas son, y el prompt le exige
+auditar el documento página por página y recoger todo en `datos_clave`, sin tope
+ni resúmenes. Si el PDF no tiene capa de texto (escaneado) o no se puede leer, se
+manda sólo el archivo, como antes. Ese mismo texto sirve de transcripción al
+archivar, sin volver a pedírsela al modelo.
+
 Word, Excel y PowerPoint (`.docx`, `.xlsx`, `.pptx`) van por un camino distinto:
 OpenAI no los lee nativamente, así que `src/lib/oficina.ts` extrae el texto en el
 servidor (`mammoth` para Word, `exceljs` para Excel, parseo del XML interno con
@@ -197,11 +206,40 @@ real del contenido, no solo un ícono:
   `previsualizarPptx`) — no es una foto de la página, pero es contenido real del
   archivo, no un decorado.
 
-Campos extraídos: tipo de documento y confianza, emisor y receptor (nombre, NIF/CIF,
-dirección), número, fechas, moneda, subtotal/impuestos/total, método de pago, líneas
-de detalle y, para contratos, objeto, vigencia, importe, ley aplicable y cláusulas
-destacadas. Lo que no aparece en el documento vuelve como `null`, y las dudas quedan
-listadas en `notas`.
+Qué devuelve el análisis:
+
+- **Tipo** (`factura`, `recibo`, `contrato` u `otro`) y confianza. El prompt es
+  estricto: sólo es factura/recibo/contrato lo que lo es de verdad; un CV, un
+  ensayo, un informe o una foto (una persona, un perro, un coche…) es `otro`.
+- **Categoría** (`categoria`): qué es exactamente, en texto libre — "Factura de
+  luz", "Currículum vitae", "Fotografía de un gato". Es lo que enseñan el
+  historial y el archivo en lugar de "Otro".
+- **Campos comerciales**: emisor y receptor (nombre, NIF/CIF, dirección), número,
+  fechas, moneda, subtotal/impuestos/total, método de pago, líneas y, en
+  contratos, objeto, vigencia, importe, ley aplicable y cláusulas. Sólo se
+  rellenan si el documento los trae con ese sentido; en un `otro` van a `null`.
+- **Datos encontrados** (`datos_clave`): pares etiqueta → valor con lo relevante
+  que no tiene campo propio (para un CV: nombre, profesión, email, experiencia…).
+- Las dudas quedan en `notas`.
+
+`categoria` y `datos_clave` llevan `.default()` en Zod para que los análisis
+guardados antes de que existieran sigan leyéndose; el `default` se quita del
+JSON Schema que se manda a OpenAI (`strict` no lo admite), donde siguen siendo
+obligatorios. Al archivar dejan de vivir sólo en el JSON del borrador: la
+categoría va a `registros.categoria` y cada dato a una fila de `registro_datos`
+(etiqueta, valor), así que el chat los consulta por SQL como cualquier otra
+columna. También se añaden al texto indexado, para que la búsqueda semántica
+encuentre los que el usuario añadió a mano y no están en la transcripción.
+
+### Formulario de revisión
+
+Los campos de `src/lib/schemas/campos.ts` son **candidatos**, no una plantilla:
+`src/app/datos-form.tsx` sólo pinta los que traen valor y los obligatorios del
+tipo que faltan (salen marcados en ámbar). Un campo que traía valor no
+desaparece aunque se vacíe mientras se edita. Lo que no tiene campo propio se
+añade con "Añadir dato" en la tarjeta "Datos encontrados" / "Otros datos",
+siempre visible; las líneas se ven siempre en facturas y recibos, y las
+cláusulas en contratos.
 
 ## Validación
 
@@ -211,7 +249,7 @@ decide qué es obligatorio:
 | | Factura | Recibo | Contrato | Otro |
 | --- | --- | --- | --- | --- |
 | Emisor (nombre) | ✓ | ✓ | ✓ | — |
-| Receptor (nombre) | ✓ | — | ✓ | — |
+| Receptor (nombre) | — | — | ✓ | — |
 | Número | ✓ | — | — | — |
 | Fecha de emisión | ✓ | ✓ | — | — |
 | Moneda y total | ✓ | ✓ | — | — |
@@ -225,6 +263,12 @@ Además se comprueban las reglas que cruzan campos:
 - **Orden**: el vencimiento no puede preceder a la emisión, ni el fin de vigencia al inicio.
 - **Aritmética**: `subtotal + impuestos = total`, con dos céntimos de tolerancia por
   redondeo; el mensaje dice la cuenta que sí sale.
+- **Líneas** (facturas y recibos): su suma tiene que coincidir con el total (tickets,
+  con el impuesto ya en cada línea), con la base imponible (facturas con líneas sin
+  impuesto) o, sin base, con total − impuestos. Un céntimo más de margen por línea.
+  Sólo se mira si todas las líneas tienen importe; pilla la línea que el análisis se
+  saltó o leyó mal. El formulario lo enseña al pie de las líneas ("7 artículos ·
+  suman 12,60 EUR ✓"); el número de artículos se calcula, no se guarda.
 
 Estas reglas cruzadas se evalúan aparte del `safeParse` porque Zod se salta sus
 refinements en cuanto falla un campo, y en el formulario interesa ver todos los
@@ -284,12 +328,19 @@ borrador y se guarda tenga los problemas que tenga. **Confirmar y guardar** exig
 la validación esté limpia y entonces, en una única transacción:
 
 1. escribe la cabecera en `registros` y el detalle en `registro_lineas` /
-   `registro_contratos`;
+   `registro_contratos` / `registro_datos`;
 2. trocea el texto del documento (~800 caracteres con solape) y guarda cada fragmento
    con su vector en `documento_chunks`.
 
 Los embeddings se piden antes de abrir la transacción, para no dejarla esperando por
 la red, y confirmar dos veces reemplaza lo anterior en lugar de duplicarlo.
+
+**Si los embeddings fallan** (sin cuota, o un proyecto de OpenAI sin permiso para el
+modelo de embeddings), el documento se archiva igual con el paso 1 —todo queda
+consultable por el camino SQL del chat— y sin el paso 2: la respuesta trae `chunks:
+0` y un `aviso` con el motivo, que la interfaz enseña como toast de advertencia y
+el servidor escribe en su consola. "Volver a archivar", una vez resuelto, genera los
+fragmentos. Antes un fallo aquí impedía archivar nada.
 
 Buscar por significado es entonces una consulta normal:
 
@@ -315,7 +366,7 @@ Cada pregunta pasa primero por un planificador que elige el camino:
 El planificador devuelve la consulta con structured output, y antes de tocar la base
 pasa por `revisarConsulta`: una sola sentencia, sin comentarios ni punto y coma, que
 empiece por SELECT o WITH, sin verbos de escritura, sin catálogo del sistema ni
-funciones peligrosas, y sólo sobre las cuatro tablas del dominio (las CTE declaradas
+funciones peligrosas, y sólo sobre las cinco tablas del dominio (las CTE declaradas
 en la propia consulta también valen).
 
 La ejecución añade la defensa de verdad: `BEGIN READ ONLY`, `statement_timeout` de
@@ -359,6 +410,7 @@ que no sean `user`/`assistant`.
 | `registros` | Una fila por documento confirmado: partes, fechas, importes |
 | `registro_lineas` | Conceptos de facturas y recibos |
 | `registro_contratos` | Objeto, vigencia, ley aplicable y cláusulas |
+| `registro_datos` | Datos sin columna propia (encontrados por la IA o añadidos a mano): etiqueta y valor |
 | `documento_chunks` | Fragmentos de texto y su `vector(1536)`, con índice HNSW |
 | `auditoria_login` | Una fila por login (ver [Login](#login)) |
 | `documento_compartidos` | Invitaciones a ver un documento: destinatario, quién la envió y `estado` (`pendiente`/`aceptado`/`rechazado`) |

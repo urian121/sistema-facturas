@@ -19,7 +19,7 @@ export default function BotonProveedor({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-full border border-line bg-surface py-2.5 text-[13px] font-medium text-ink transition hover:border-line-strong hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-full bg-sunken py-2.5 text-[13px] font-medium text-ink transition hover:bg-line disabled:cursor-not-allowed disabled:opacity-60"
     >
       {icono}
       {etiqueta}

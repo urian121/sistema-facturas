@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
-import { ExtraccionBrutaSchema, validarExtraccion } from "@/lib/schemas";
+import { ExtraccionBrutaSchema, normalizarFecha, validarExtraccion } from "@/lib/schemas";
 import { aVector, embeber, textoDeRespaldo, trocear } from "@/lib/embeddings";
 import { transcribir } from "@/lib/transcripcion";
 import { emailUsuarioActual } from "@/lib/usuario-actual";
@@ -54,20 +54,34 @@ export async function POST(request: Request) {
   // entre mil y dos mil tokens de salida y duplicaba la espera de la revisión.
   const doc = rows[0] as { filename: string; mime_type: string; data: Buffer };
   const transcrito = datos.texto?.trim() ? datos.texto : await transcribir(doc);
-  const texto = transcrito?.trim() ? transcrito : textoDeRespaldo(datos);
+  // Los datos encontrados van también al texto indexado: los que el usuario
+  // añadió a mano no están en la transcripción, y así la búsqueda semántica
+  // los encuentra igual que el resto.
+  // Fechas en AAAA-MM-DD también aquí: cubre las escritas a mano y los
+  // análisis guardados antes de normalizarlas al extraer.
+  const datosClave = datos.datos_clave
+    .filter((d) => d.etiqueta.trim() && d.valor.trim())
+    .map((d) => ({ etiqueta: d.etiqueta.trim(), valor: normalizarFecha(d.valor.trim()) }));
+  const texto = transcrito?.trim()
+    ? [transcrito, ...datosClave.map((d) => `${d.etiqueta}: ${d.valor}`)].join("\n")
+    : textoDeRespaldo(datos);
 
-  // Los embeddings se piden antes de abrir la transacción: si el proveedor
-  // falla, no dejamos una transacción abierta esperando por la red.
+  // Los embeddings se piden antes de abrir la transacción, para no dejarla
+  // abierta esperando por la red.
   const trozos = trocear(texto);
 
-  let vectores: number[][];
+  // Los embeddings sólo alimentan la búsqueda por significado del chat. Si
+  // fallan (cuota, un proyecto de OpenAI sin permiso para el modelo…), el
+  // documento se archiva igual —cabecera, líneas, datos, todo consultable por
+  // SQL— sin fragmentos, y se avisa: "Volver a archivar" los genera cuando el
+  // proveedor responda. Antes un fallo aquí no dejaba archivar nada.
+  let vectores: number[][] | null = null;
+  let avisoIndexado: string | null = null;
   try {
     vectores = await embeber(trozos);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error generando los embeddings" },
-      { status: 502 },
-    );
+    avisoIndexado = err instanceof Error ? err.message : "Error generando los embeddings";
+    console.warn(`[confirm] ${id}: se archiva sin fragmentos indexados — ${avisoIndexado}`);
   }
 
   const cliente = await pool.connect();
@@ -83,8 +97,8 @@ export async function POST(request: Request) {
          document_id, tipo_documento, resumen, idioma, numero_documento,
          fecha_emision, fecha_vencimiento, moneda, subtotal, impuestos, total,
          metodo_pago, emisor_nombre, emisor_nif, emisor_direccion,
-         receptor_nombre, receptor_nif, receptor_direccion
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+         receptor_nombre, receptor_nif, receptor_direccion, categoria
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id, confirmado_at`,
       [
         id,
@@ -105,6 +119,7 @@ export async function POST(request: Request) {
         datos.receptor.nombre,
         datos.receptor.identificacion_fiscal,
         datos.receptor.direccion,
+        datos.categoria?.trim() || null,
       ],
     );
 
@@ -115,6 +130,16 @@ export async function POST(request: Request) {
         `INSERT INTO registro_lineas (registro_id, orden, descripcion, cantidad, precio_unitario, importe)
          VALUES ($1,$2,$3,$4,$5,$6)`,
         [registroId, orden, linea.descripcion, linea.cantidad, linea.precio_unitario, linea.importe],
+      );
+    }
+
+    // Cada dato encontrado (o añadido a mano) es una fila consultable, no
+    // sólo texto dentro del JSON del borrador.
+    for (const [orden, dato] of datosClave.entries()) {
+      await cliente.query(
+        `INSERT INTO registro_datos (registro_id, orden, etiqueta, valor)
+         VALUES ($1,$2,$3,$4)`,
+        [registroId, orden, dato.etiqueta, dato.valor],
       );
     }
 
@@ -136,12 +161,14 @@ export async function POST(request: Request) {
       );
     }
 
-    for (const [orden, trozo] of trozos.entries()) {
-      await cliente.query(
-        `INSERT INTO documento_chunks (document_id, orden, texto, embedding)
-         VALUES ($1,$2,$3,$4)`,
-        [id, orden, trozo, aVector(vectores[orden])],
-      );
+    if (vectores) {
+      for (const [orden, trozo] of trozos.entries()) {
+        await cliente.query(
+          `INSERT INTO documento_chunks (document_id, orden, texto, embedding)
+           VALUES ($1,$2,$3,$4)`,
+          [id, orden, trozo, aVector(vectores[orden])],
+        );
+      }
     }
 
     // El texto queda guardado en el borrador: reconfirmar no vuelve a transcribir.
@@ -159,7 +186,10 @@ export async function POST(request: Request) {
       document_id: id,
       confirmado_at: creado[0].confirmado_at,
       lineas: datos.lineas.length,
-      chunks: trozos.length,
+      datos: datosClave.length,
+      chunks: vectores ? trozos.length : 0,
+      // Sólo si no se pudo indexar para la búsqueda por significado.
+      aviso: avisoIndexado,
     });
   } catch (err) {
     await cliente.query("ROLLBACK");

@@ -96,6 +96,21 @@ describe("embeber", () => {
     expect(vectores[0]).toHaveLength(DIMENSIONES);
   });
 
+  it("explica cómo arreglarlo cuando el proyecto de OpenAI no tiene permiso para el modelo", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "Project `proj_x` does not have access to model `text-embedding-3-small`",
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+
+    await expect(embeber(["uno"])).rejects.toThrow(/no tiene permiso.*Settings → Project → Limits/);
+  });
+
   it("no llama al proveedor si no hay nada que embeber", async () => {
     expect(await embeber([])).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();

@@ -110,7 +110,7 @@ export default function MenuDocumento({
       {abierto && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-[0_8px_24px_-8px_rgba(36,36,36,0.35)]"
+          className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg bg-surface py-1 shadow-[0_8px_24px_-8px_rgba(36,36,36,0.35)]"
         >
           {opciones.map(({ etiqueta, icono: Icono, peligro, onClick }) => (
             <button

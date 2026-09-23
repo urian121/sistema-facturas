@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { esFechaISO, porCampo, validarExtraccion, type Extraccion } from "@/lib/schemas";
-import { escribir, leer } from "@/lib/schemas/campos";
+import {
+  ExtraccionBrutaSchema,
+  esFechaISO,
+  normalizarFecha,
+  porCampo,
+  resumenLineas,
+  validarExtraccion,
+  type Extraccion,
+} from "@/lib/schemas";
+import { escribir, leer, tieneValor } from "@/lib/schemas/campos";
 import { aNumero } from "@/lib/numero";
 import {
   base,
@@ -71,6 +79,15 @@ describe("factura", () => {
     ]);
   });
 
+  it("no exige receptor: simplificadas y de consumidor final no lo identifican", () => {
+    const sinReceptor = {
+      ...facturaValida(),
+      receptor: { nombre: null, identificacion_fiscal: null, direccion: null },
+    };
+
+    expect(validarExtraccion(sinReceptor).valido).toBe(true);
+  });
+
   it("no acepta una factura sin líneas", () => {
     const { problemas } = validarExtraccion({ ...facturaValida(), lineas: [] });
 
@@ -113,7 +130,8 @@ describe("cuadre subtotal + impuestos = total", () => {
   });
 
   it("no comprueba el cuadre si falta alguno de los tres importes", () => {
-    const recibo = { ...reciboValido(), subtotal: null, impuestos: null };
+    // Sin líneas, para aislar el cuadre de la regla de la suma de líneas.
+    const recibo = { ...reciboValido(), subtotal: null, impuestos: null, lineas: [] };
 
     expect(validarExtraccion(recibo).valido).toBe(true);
   });
@@ -122,6 +140,61 @@ describe("cuadre subtotal + impuestos = total", () => {
     const recibo = { ...reciboValido(), impuestos: 5 };
 
     expect(campos(validarExtraccion(recibo).problemas)).toEqual(["total"]);
+  });
+});
+
+describe("suma de las líneas", () => {
+  /** El ticket del bar: 7 líneas con el impuesto incluido que suman el total. */
+  const ticket = (): Extraccion => ({
+    ...reciboValido(),
+    subtotal: 11.45,
+    impuestos: 1.15,
+    total: 12.6,
+    lineas: [
+      { descripcion: "CAÑA", cantidad: 1, precio_unitario: 1.5, importe: 1.5 },
+      { descripcion: "COLA BIG", cantidad: 1, precio_unitario: 2.2, importe: 2.2 },
+      ...Array.from({ length: 4 }, () => ({
+        descripcion: "N4 CROQUETA",
+        cantidad: 1,
+        precio_unitario: 1.6,
+        importe: 1.6,
+      })),
+      { descripcion: "N1 TORREZNOS", cantidad: 1, precio_unitario: 2.5, importe: 2.5 },
+    ],
+  });
+
+  it("acepta líneas que suman el total (impuesto incluido en cada una)", () => {
+    expect(validarExtraccion(ticket()).valido).toBe(true);
+    expect(resumenLineas(ticket().lineas)).toEqual({ articulos: 7, suma: 12.6 });
+  });
+
+  it("acepta líneas que suman la base imponible (factura con líneas sin impuesto)", () => {
+    expect(validarExtraccion(facturaValida()).valido).toBe(true);
+  });
+
+  it("señala la línea que falta, con la cuenta", () => {
+    const sinUna = { ...ticket(), lineas: ticket().lineas.slice(0, 6) };
+    const { problemas } = validarExtraccion(sinUna);
+
+    expect(campos(problemas)).toEqual(["lineas"]);
+    expect(porCampo(problemas)["lineas"][0]).toMatch(/suman 10\.1.*11\.45.*12\.6/);
+  });
+
+  it("no compara si alguna línea no tiene importe o no hay total", () => {
+    const aMedias = ticket();
+    aMedias.lineas[0] = { ...aMedias.lineas[0], importe: null };
+    expect(campos(validarExtraccion(aMedias).problemas)).not.toContain("lineas");
+
+    expect(resumenLineas([]).suma).toBeNull();
+  });
+
+  it("cuenta como un artículo la línea sin cantidad", () => {
+    expect(
+      resumenLineas([
+        { cantidad: 3, importe: 3 },
+        { cantidad: null, importe: 1 },
+      ]).articulos,
+    ).toBe(4);
   });
 });
 
@@ -198,6 +271,57 @@ describe("otro", () => {
   it("sólo exige un resumen", () => {
     expect(validarExtraccion(base()).valido).toBe(true);
     expect(campos(validarExtraccion({ ...base(), resumen: "" }).problemas)).toEqual(["resumen"]);
+  });
+
+  it("acepta un análisis guardado antes de existir categoría y datos encontrados", () => {
+    const antiguo = { ...base() } as Partial<Extraccion>;
+    delete antiguo.categoria;
+    delete antiguo.datos_clave;
+
+    expect(validarExtraccion(antiguo as Extraccion).valido).toBe(true);
+    const leido = ExtraccionBrutaSchema.parse(antiguo);
+    expect(leido.categoria).toBeNull();
+    expect(leido.datos_clave).toEqual([]);
+  });
+
+  it("pide nombre y valor en cada dato encontrado", () => {
+    const conDatoAMedias = {
+      ...base(),
+      datos_clave: [
+        { etiqueta: "Profesión", valor: "Ingeniero" },
+        { etiqueta: "", valor: "" },
+      ],
+    };
+
+    expect(campos(validarExtraccion(conDatoAMedias).problemas).sort()).toEqual([
+      "datos_clave.1.etiqueta",
+      "datos_clave.1.valor",
+    ]);
+  });
+});
+
+describe("normalizarFecha", () => {
+  it("pasa a AAAA-MM-DD las fechas escritas con el día primero", () => {
+    expect(normalizarFecha("20-04-1992")).toBe("1992-04-20");
+    expect(normalizarFecha("5/3/2026")).toBe("2026-03-05");
+    expect(normalizarFecha("25 JUN 1986")).toBe("1986-06-25");
+    // Pasaportes: el mes en dos idiomas.
+    expect(normalizarFecha("25 / Jun / Jun / 1986")).toBe("1986-06-25");
+    expect(normalizarFecha("14 OCT/OCT 2019")).toBe("2019-10-14");
+  });
+
+  it("deja igual lo que ya está bien, lo que no es fecha y las fechas imposibles", () => {
+    expect(normalizarFecha("1986-06-25")).toBe("1986-06-25");
+    expect(normalizarFecha("158366173")).toBe("158366173");
+    expect(normalizarFecha("URIAN JOSE")).toBe("URIAN JOSE");
+    expect(normalizarFecha("31-02-2026")).toBe("31-02-2026");
+  });
+});
+
+describe("tieneValor", () => {
+  it("cuenta como vacío null, cadenas en blanco y listas vacías; el 0 sí es un valor", () => {
+    for (const vacio of [null, undefined, "", "   ", []]) expect(tieneValor(vacio)).toBe(false);
+    for (const lleno of ["x", 0, [1], { a: 1 }]) expect(tieneValor(lleno)).toBe(true);
   });
 });
 

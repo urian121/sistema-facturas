@@ -108,7 +108,7 @@ export default function CompartirModal({ doc, onCerrar }: { doc: Doc; onCerrar: 
       .catch((err) => {
         if (vigente) {
           setCompartidos([]);
-          notificar.error(err instanceof Error ? err.message : "Error inesperado");
+          notificar.error(err);
         }
       });
     return () => {
@@ -155,7 +155,7 @@ export default function CompartirModal({ doc, onCerrar }: { doc: Doc; onCerrar: 
       const motivo = err instanceof Error ? err.message : "Error inesperado";
       // Toast para enterarse aunque no se mire el campo, y en línea para
       // corregir el email ahí mismo.
-      notificar.error(`No se pudo compartir "${doc.filename}": ${motivo}`);
+      notificar.error(`No se pudo compartir "${doc.filename}": ${motivo}`, err);
       setError(motivo);
     } finally {
       setEnviando(false);
@@ -175,7 +175,7 @@ export default function CompartirModal({ doc, onCerrar }: { doc: Doc; onCerrar: 
       setCompartidos((prev) => (prev ?? []).filter((c) => c.usuario_email !== usuarioEmail));
       notificar.ok(`Ya no está compartido con ${usuarioEmail}`);
     } catch (err) {
-      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+      notificar.error(err);
     }
   }
 
@@ -199,7 +199,7 @@ export default function CompartirModal({ doc, onCerrar }: { doc: Doc; onCerrar: 
           // Sólo el de la opacidad: `transition-all` dispara uno por propiedad (ver ConfirmarModal).
           if (e.target === e.currentTarget && !visible && e.propertyName === "opacity") onCerrar();
         }}
-        className={`relative w-full max-w-md rounded-xl border border-line bg-surface p-5 shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)] transition-all duration-150 ease-out ${
+        className={`relative w-full max-w-md rounded-xl bg-surface p-5 shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)] transition-all duration-150 ease-out ${
           visible ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
@@ -224,12 +224,12 @@ export default function CompartirModal({ doc, onCerrar }: { doc: Doc; onCerrar: 
             aria-label="Email del usuario"
             aria-invalid={emailInvalido}
             aria-describedby="compartir-estado-email"
-            className={`min-w-0 flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label focus-visible:outline-none ${
+            className={`min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-[13px] outline-none transition placeholder:text-label focus-visible:outline-none ${
               emailInvalido
-                ? "border-danger"
+                ? "border-danger bg-surface"
                 : estadoEmail === "existe"
-                  ? "border-ok"
-                  : "border-line hover:border-line-strong focus:border-line-strong"
+                  ? "border-ok bg-surface"
+                  : "border-transparent bg-sunken focus:border-accent-strong/35 focus:bg-surface"
             }`}
           />
           <button

@@ -67,7 +67,7 @@ export default function BotonGoogle() {
     <BotonProveedor
       type="button"
       icono={<IconoGoogle className="h-4 w-4" />}
-      etiqueta={cargando ? "Abriendo…" : "Continuar con Google"}
+      etiqueta={cargando ? "Abriendo…" : "Empezar con Google"}
       disabled={cargando}
       onClick={iniciarSesion}
     />

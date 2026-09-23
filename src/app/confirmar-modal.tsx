@@ -70,7 +70,7 @@ export default function ConfirmarModal({
           pendiente.current = null;
           accion?.();
         }}
-        className={`relative w-full max-w-sm rounded-xl border border-line bg-surface p-5 shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)] transition-all duration-150 ease-out ${
+        className={`relative w-full max-w-sm rounded-xl bg-surface p-5 shadow-[0_16px_48px_-16px_rgba(36,36,36,0.35)] transition-all duration-150 ease-out ${
           visible ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >

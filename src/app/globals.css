@@ -192,8 +192,9 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
-/* Movimiento autorizado: los datos llegando tras el análisis (`entra`) y,
-   mientras se analiza, el escaneo (`escaneo`, `detecta`). Nada más se mueve. */
+/* Movimiento autorizado: los datos llegando tras el análisis (`entra`),
+   mientras se analiza el escaneo (`escaneo`, `detecta`), y la escena de
+   muestra del login (`demo-*`). Nada más se mueve. */
 @keyframes entra {
   from {
     opacity: 0;
@@ -238,10 +239,69 @@ body {
   animation: detecta 2.4s ease-in-out infinite;
 }
 
+/* Escena del login (src/app/login/demo-analisis.tsx), en bucle de 7 s: cada
+   dato entra, se queda y se va; el rodeo del total se dibuja y se borra. */
+@keyframes demo-dato {
+  0%,
+  22% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  30%,
+  86% {
+    opacity: 1;
+    transform: none;
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+.demo-dato {
+  opacity: 0;
+  animation: demo-dato 7s cubic-bezier(0.16, 1, 0.3, 1) infinite both;
+}
+
+@keyframes demo-trazo {
+  0%,
+  48% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  62%,
+  88% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  96%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+.demo-trazo {
+  stroke-dasharray: 1;
+  animation: demo-trazo 7s ease-in-out infinite both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .entra,
   .detecta {
     animation: none;
+  }
+
+  /* Sin bucle: se ve directamente el resultado del análisis. */
+  .demo-dato {
+    animation: none;
+    opacity: 1;
+  }
+
+  .demo-trazo {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 
   /* Sin barrido: el haz se queda quieto en el medio, como indicador. */

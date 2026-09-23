@@ -257,3 +257,21 @@ export const IconoCampana = (p: Props) => (
     <path d="M10 20.5a2 2 0 0 0 4 0" />
   </Svg>
 );
+
+/** Billete: sección de importes del formulario de datos. */
+export const IconoMoneda = (p: Props) => (
+  <Svg {...p}>
+    <rect x="3" y="6.5" width="18" height="11" rx="2" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M6.5 9.5v5M17.5 9.5v5" />
+  </Svg>
+);
+
+/** Disquete: guardar un borrador sin archivarlo todavía. */
+export const IconoGuardar = (p: Props) => (
+  <Svg {...p}>
+    <path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
+    <path d="M8 4v4h7V4" />
+    <rect x="8" y="13" width="8" height="7" rx="0.5" />
+  </Svg>
+);

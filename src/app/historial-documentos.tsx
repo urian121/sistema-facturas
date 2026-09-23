@@ -68,7 +68,9 @@ function alTeclear(e: KeyboardEvent, onElegir: () => void) {
 function estado(doc: Doc): string {
   const fecha = formatoFecha.format(new Date(doc.created_at));
   if (doc.compartido_por) return `Compartido por ${doc.compartido_por.split("@")[0]} · ${fecha}`;
-  return `${doc.doc_type ? etiquetaTipo(doc.doc_type) : "Sin analizar"} · ${fecha}`;
+  // "Currículum vitae" dice más que "Otro": la categoría manda cuando la hay.
+  const tipo = doc.extraction?.categoria?.trim() || (doc.doc_type && etiquetaTipo(doc.doc_type));
+  return `${tipo || "Sin analizar"} · ${fecha}`;
 }
 
 /**
@@ -166,7 +168,7 @@ function Cuadricula({
             className={`flex cursor-pointer flex-col rounded-lg border text-left transition ${
               activo
                 ? "border-accent-strong ring-1 ring-accent-strong"
-                : "border-line hover:border-line-strong hover:bg-sunken"
+                : "border-transparent bg-sunken/60 hover:bg-sunken"
             }`}
           >
             <div className="relative overflow-hidden rounded-t-lg">
@@ -262,11 +264,11 @@ export default function HistorialDocumentos({
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por nombre de archivo…"
               aria-label="Buscar en el historial"
-              className="w-full rounded-full border border-line bg-surface py-1.5 pl-8 pr-3 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-accent-strong/35 focus-visible:outline-none"
+              className="w-full rounded-full border border-transparent bg-sunken py-1.5 pl-8 pr-3 text-[13px] outline-none transition placeholder:text-label hover:bg-line/60 focus:border-accent-strong/35 focus:bg-surface focus-visible:outline-none"
             />
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-line p-0.5">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-sunken p-0.5">
             {(
               [
                 ["lista", "Vista de lista", IconoLista, "left"],
@@ -322,7 +324,7 @@ export default function HistorialDocumentos({
                   <div className="relative shrink-0">
                     <Miniatura
                       doc={doc}
-                      className="h-9 w-9 rounded-md border border-line"
+                      className="h-9 w-9 rounded-md"
                       iconoClassName="h-4 w-4"
                     />
                     {archivados.has(doc.id) && (

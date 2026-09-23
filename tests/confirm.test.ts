@@ -174,6 +174,40 @@ describe("POST /api/confirm", () => {
     );
   });
 
+  it("archiva cada dato encontrado como fila de registro_datos, y la categoría en su columna", async () => {
+    conExtraccion({
+      ...facturaValida(),
+      categoria: "Factura de café",
+      datos_clave: [
+        { etiqueta: "Pedido", valor: "PED-77" },
+        // Se guarda sin los espacios de alrededor.
+        { etiqueta: " Comercial ", valor: " Ana " },
+        // Y las fechas, en AAAA-MM-DD aunque se escribieran de otra forma.
+        { etiqueta: "Fecha de nacimiento", valor: "20-04-1992" },
+      ],
+      texto: "TOSTADORES DEL SUR",
+    });
+
+    const res = await POST(peticion());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.datos).toBe(3);
+    const filas = inserts("registro_datos").map(([, valores]) => valores);
+    expect(filas).toEqual([
+      [REGISTRO, 0, "Pedido", "PED-77"],
+      [REGISTRO, 1, "Comercial", "Ana"],
+      [REGISTRO, 2, "Fecha de nacimiento", "1992-04-20"],
+    ]);
+
+    const [, cabecera] = inserts("registros")[0];
+    expect(cabecera.at(-1)).toBe("Factura de café");
+
+    // Van también al texto indexado: los añadidos a mano no están en la transcripción.
+    const { input } = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(input.join(" ")).toContain("Pedido: PED-77");
+  });
+
   it("no crea fila de contrato para una factura", async () => {
     await POST(peticion());
 
@@ -239,15 +273,28 @@ describe("POST /api/confirm", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("no abre la transacción si fallan los embeddings", async () => {
+  it("archiva igual si fallan los embeddings, sin fragmentos y con aviso", async () => {
+    conExtraccion({
+      ...facturaValida(),
+      datos_clave: [{ etiqueta: "Pedido", valor: "PED-77" }],
+      texto: "TOSTADORES DEL SUR",
+    });
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "sin saldo" } }), { status: 402 }),
     );
 
     const res = await POST(peticion());
+    const body = await res.json();
 
-    expect(res.status).toBe(502);
-    expect(connect).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(body.chunks).toBe(0);
+    expect(body.aviso).toMatch(/sin saldo/);
+    // Lo consultable por SQL se guarda: cabecera, líneas y datos.
+    expect(inserts("registros")).toHaveLength(1);
+    expect(inserts("registro_lineas")).toHaveLength(2);
+    expect(inserts("registro_datos")).toHaveLength(1);
+    expect(inserts("documento_chunks")).toHaveLength(0);
+    expect(clienteQuery.mock.calls.map(([sql]) => sql)).toContain("COMMIT");
   });
 
   it("hace ROLLBACK si falla una inserción", async () => {

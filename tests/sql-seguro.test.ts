@@ -16,6 +16,13 @@ const DOC = "11111111-1111-1111-1111-111111111111";
 const OTRO = "22222222-2222-2222-2222-222222222222";
 
 describe("revisarConsulta", () => {
+  it("acepta consultar los datos encontrados de registro_datos", () => {
+    const veredicto = revisarConsulta(
+      "SELECT r.document_id, d.valor FROM registros r JOIN registro_datos d ON d.registro_id = r.id WHERE d.etiqueta ILIKE '%profesi%'",
+    );
+    expect(veredicto.ok).toBe(true);
+  });
+
   it("acepta un SELECT sobre las tablas del dominio", () => {
     const veredicto = revisarConsulta(
       "SELECT sum(total) AS total_facturado, array_agg(document_id) FROM registros WHERE tipo_documento = 'factura'",
@@ -113,7 +120,9 @@ describe("ejecutarConsulta", () => {
     const vistas = clienteQuery.mock.calls
       .map(([sql]) => sql)
       .filter((sql: string) => sql.includes("CREATE TEMP VIEW"));
-    expect(vistas).toHaveLength(4);
+    // documents, registros, registro_lineas, registro_contratos y registro_datos.
+    expect(vistas).toHaveLength(5);
+    expect(vistas.some((v: string) => v.includes("VIEW registro_datos"))).toBe(true);
     for (const vista of vistas) {
       expect(vista).toContain("current_setting('app.usuario_email', true)");
     }

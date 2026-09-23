@@ -59,7 +59,7 @@ export default function OficinaMiniatura({
                 {fila.map((celda, j) => (
                   <td
                     key={j}
-                    className="truncate border border-line/70 bg-surface px-1 py-0.5"
+                    className="truncate border-b border-line/70 bg-surface px-1 py-0.5"
                   >
                     {celda}
                   </td>
