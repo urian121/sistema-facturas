@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { puedeVer } from "@/lib/compartir";
 import { pool } from "@/lib/db";
 import { esOffice, previsualizarOficina } from "@/lib/oficina";
 import { emailUsuarioActual } from "@/lib/usuario-actual";
@@ -24,7 +25,7 @@ export async function GET(
   const tamano = new URL(request.url).searchParams.get("tamano") === "grande" ? "grande" : "chico";
 
   const { rows } = await pool.query(
-    `SELECT mime_type, data FROM documents WHERE id = $1 AND usuario_email = $2`,
+    `SELECT mime_type, data FROM documents WHERE id = $1 AND ${puedeVer(2)}`,
     [id, usuarioEmail],
   );
   if (rows.length === 0) {

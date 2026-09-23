@@ -365,7 +365,7 @@ export default function DatosForm({
             type="button"
             onClick={onGuardar}
             disabled={guardando || confirmando}
-            className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-full border border-line px-4 py-1.5 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-50"
           >
             {guardando ? "Guardando…" : "Guardar borrador"}
           </button>
@@ -374,7 +374,7 @@ export default function DatosForm({
             onClick={onConfirmar}
             disabled={confirmando || guardando || !valido}
             title={valido ? undefined : "Corrige los campos marcados"}
-            className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-full bg-accent px-4 py-1.5 text-[13px] font-medium text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {confirmando ? "Archivando…" : confirmado ? "Volver a archivar" : "Confirmar y archivar"}
           </button>

@@ -14,11 +14,13 @@ const ssl =
       ? { rejectUnauthorized: false }
       : false;
 
+/** Lo comparte el cliente dedicado a `LISTEN` de `src/lib/tiempo-real.ts`. */
+export const opcionesConexion = { connectionString, ssl };
+
 export const pool =
   globalForPool.pool ??
   new Pool({
-    connectionString,
-    ssl,
+    ...opcionesConexion,
     // El paquete Basic admite 20 conexiones; se deja margen para migraciones.
     max: Number(process.env.DATABASE_POOL_MAX ?? 10),
   });

@@ -56,6 +56,13 @@ errores. Cada push a `master` despliega a producción (ver "Despliegue" en
   válidos para colores/sombras/curvas que no están en la escala (ej.
   `shadow-[0_8px_24px_-8px_rgba(...)]`), solo evita los de tamaño/espaciado
   cuando hay canónico.
+- Botones de acción (los que llevan texto: "Analizar documento", "Cancelar",
+  "Mover a la papelera", "Guardar borrador"…, y también los de sólo icono con
+  fondo de color, como el de enviar del chat) van **siempre con `rounded-full`**
+  (forma de píldora) y `px-4` para que el texto respire en los extremos —
+  nunca `rounded-md`/`rounded-lg`. Quedan fuera los botones-icono del riel y
+  del encabezado, las tarjetas/zonas clicables (zona de subida, sugerencias
+  del chat) y las filas de menú.
 
 ### Tests
 

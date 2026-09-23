@@ -256,7 +256,7 @@ export default function Chat({
               type="submit"
               disabled={!hayDocumentos || pensando || pregunta.trim() === ""}
               aria-label="Preguntar"
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-accent text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <IconoEnviar className="h-3.5 w-3.5" />
             </button>

@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import CompartirModal from "./compartir-modal";
 import ConfirmarModal from "./confirmar-modal";
-import { IconoAbrirExterno, IconoDescargar, IconoLapiz, IconoPapelera, IconoPuntos } from "./iconos";
+import {
+  IconoAbrirExterno,
+  IconoCompartir,
+  IconoDescargar,
+  IconoLapiz,
+  IconoPapelera,
+  IconoPuntos,
+} from "./iconos";
 import { useEscapeKey } from "./use-escape-key";
 import type { Doc } from "./uploader";
 
@@ -24,6 +32,7 @@ export default function MenuDocumento({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [compartiendo, setCompartiendo] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
 
   useEscapeKey(abierto, () => setAbierto(false));
@@ -37,12 +46,16 @@ export default function MenuDocumento({
     return () => document.removeEventListener("mousedown", fuera);
   }, [abierto]);
 
-  const opciones: {
+  type Opcion = {
     etiqueta: string;
     icono: typeof IconoAbrirExterno;
     peligro?: boolean;
+    /** Sólo para el dueño: en un documento compartido (solo lectura) no se muestra. */
+    soloDueno?: boolean;
     onClick: () => void;
-  }[] = [
+  };
+
+  const todas: Opcion[] = [
     {
       etiqueta: "Abrir en otra pestaña",
       icono: IconoAbrirExterno,
@@ -59,16 +72,25 @@ export default function MenuDocumento({
       },
     },
     {
+      etiqueta: "Compartir",
+      icono: IconoCompartir,
+      soloDueno: true,
+      onClick: () => setCompartiendo(true),
+    },
+    {
       etiqueta: "Renombrar",
       icono: IconoLapiz,
+      soloDueno: true,
       onClick: () => onIniciarRenombrar(doc.id),
     },
     {
       etiqueta: "Eliminar",
       icono: IconoPapelera,
+      soloDueno: true,
       onClick: () => setConfirmandoEliminar(true),
     },
   ];
+  const opciones = doc.compartido_por ? todas.filter((o) => !o.soloDueno) : todas;
 
   return (
     <div ref={raiz} draggable={false} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -99,7 +121,7 @@ export default function MenuDocumento({
                 setAbierto(false);
                 onClick();
               }}
-              className={`flex w-full cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 py-1 text-left text-[11px] font-normal leading-none transition ${
+              className={`flex w-full cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-left text-[12px] font-normal leading-none transition ${
                 peligro ? "text-danger hover:bg-danger-soft" : "text-ink hover:bg-sunken"
               }`}
             >
@@ -109,6 +131,8 @@ export default function MenuDocumento({
           ))}
         </div>
       )}
+
+      {compartiendo && <CompartirModal doc={doc} onCerrar={() => setCompartiendo(false)} />}
 
       {confirmandoEliminar && (
         <ConfirmarModal

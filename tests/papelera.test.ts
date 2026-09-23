@@ -5,7 +5,7 @@ const query = vi.fn();
 vi.mock("@/lib/db", () => ({ pool: { query } }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(async () => ({ user: { email: EMAIL_PRUEBA } })) }));
 
-const { GET } = await import("@/app/api/documents/papelera/route");
+const { GET, DELETE } = await import("@/app/api/documents/papelera/route");
 
 const FILA = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -37,5 +37,27 @@ describe("GET /api/documents/papelera", () => {
     query.mockResolvedValue({ rows: [] });
 
     expect(await (await GET()).json()).toEqual([]);
+  });
+});
+
+describe("DELETE /api/documents/papelera", () => {
+  it("borra para siempre sólo los documentos del usuario que están en la papelera", async () => {
+    query.mockResolvedValue({ rowCount: 3, rows: [] });
+
+    const res = await DELETE();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ eliminados: 3 });
+    const [sql, valores] = query.mock.calls[0];
+    expect(sql).toContain("DELETE FROM documents");
+    expect(sql).toContain("usuario_email = $1");
+    expect(sql).toContain("eliminado_at IS NOT NULL");
+    expect(valores).toEqual([EMAIL_PRUEBA]);
+  });
+
+  it("con la papelera ya vacía responde 0 eliminados", async () => {
+    query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+    expect(await (await DELETE()).json()).toEqual({ eliminados: 0 });
   });
 });

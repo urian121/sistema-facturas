@@ -361,6 +361,8 @@ que no sean `user`/`assistant`.
 | `registro_contratos` | Objeto, vigencia, ley aplicable y cláusulas |
 | `documento_chunks` | Fragmentos de texto y su `vector(1536)`, con índice HNSW |
 | `auditoria_login` | Una fila por login (ver [Login](#login)) |
+| `documento_compartidos` | Invitaciones a ver un documento: destinatario, quién la envió y `estado` (`pendiente`/`aceptado`/`rechazado`) |
+| `notificaciones` | Un aviso "X te compartió Y" por invitación: destinatario, remitente, documento y fecha |
 
 `documents.eliminado_at` es la papelera: columna en vez de tabla aparte
 (`NULL` = activo, con fecha = en la papelera), por la misma razón que
@@ -368,6 +370,48 @@ que no sean `user`/`assistant`.
 filtra siempre con `JOIN`, nunca hace falta tocarlo aparte. `PATCH
 /api/documents/[id]` con `{ "papelera": true/false }` mueve o restaura;
 `DELETE` sigue siendo el borrado definitivo (se usa sólo desde la papelera).
+
+### Compartir documentos y notificaciones
+
+"Compartir" (menú ⋮ de cada tarjeta del historial) **invita** a otro
+usuario de la app, identificado por su email de Google, a ver el documento en
+**solo lectura**:
+
+1. **Invitar**: `POST /api/documents/[id]/compartidos` con `{ "email" }`.
+   "Usuario de la app" = alguien con al menos un login en `auditoria_login`
+   (no hay tabla `users`); si no, 404. El modal lo comprueba antes, mientras
+   se escribe (`GET /api/usuarios?email=` → `{ existe, propio }`), y no deja
+   enviar hasta que el email es de alguien de la app; el resultado, bien o
+   mal, se avisa con un toast. En una sola sentencia SQL se crea la
+   fila de `documento_compartidos` en `pendiente`, la de `notificaciones` y
+   se hace `pg_notify('notificaciones', <email del destinatario>)`. Volver a
+   invitar a alguien pendiente o aceptado no hace nada; a alguien que
+   rechazó, reabre la invitación con una notificación nueva.
+2. **Aviso en vivo**: la campana del encabezado tiene abierto un
+   `EventSource` contra `/api/notificaciones/stream` (Server-Sent Events).
+   Cada proceso de Next mantiene una conexión en `LISTEN notificaciones`
+   (`src/lib/tiempo-real.ts`) y reenvía el aviso a las pestañas de ese email;
+   el aviso no lleva datos, el navegador vuelve a pedir `GET
+   /api/notificaciones`. Postgres hace de bus, así que funciona con varias
+   instancias y sin librerías de sockets (Socket.IO obligaría a un servidor
+   propio en vez de `next start`, y aquí sólo hace falta servidor → navegador).
+3. **Responder**: `PATCH /api/notificaciones/[id]` con `{ "respuesta":
+   "aceptar" | "rechazar" }`, sólo mientras está `pendiente`. Al aceptar, el
+   documento aparece en el historial del destinatario marcado "Compartido por…".
+4. **Qué puede hacer el destinatario**: abrir, descargar y ver la vista previa
+   (`/api/files/[id]`, `/api/preview/[id]`, vía `puedeVer()` de
+   `src/lib/compartir.ts`, que exige `estado = 'aceptado'`). Nada más:
+   analizar, renombrar, editar/confirmar la extracción, papelera, borrar y
+   volver a compartir siguen filtrando por `usuario_email` a secas.
+5. **Qué controla el dueño**: el mismo modal lista a quién invitó y en qué
+   estado; `DELETE /api/documents/[id]/compartidos?email=` quita el acceso y
+   sus notificaciones (con aviso en vivo). Un documento en la papelera deja de
+   verse para los destinatarios; borrarlo para siempre elimina invitaciones y
+   notificaciones (`ON DELETE CASCADE`).
+
+Fuera de alcance por ahora: los compartidos no entran en el chat ni en el
+archivo de registros de quien los recibe, y el dueño no recibe aviso cuando
+aceptan o rechazan (lo ve al abrir el modal).
 
 El esquema se aplica con `npm run migrate` (`db/init/*.sql`, idempotente).
 

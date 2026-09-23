@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { pool } from "@/lib/db";
+import { listarDocumentos } from "@/lib/documentos";
 import { MAX_MB, TIPOS_PERMITIDOS } from "@/lib/limites-subida";
 import { listarRegistros, type Registro } from "@/lib/registros";
 import { cerrarSesion } from "./acciones-sesion";
@@ -18,16 +18,7 @@ export default async function Home() {
   // El proxy ya exige sesión para llegar aquí; sin email no hay nada propio que listar.
   if (usuarioEmail) {
     try {
-      const { rows } = await pool.query(
-        `SELECT id, filename, mime_type, size_bytes, created_at, doc_type, extraction
-           FROM documents
-          WHERE usuario_email = $1
-            AND eliminado_at IS NULL
-          ORDER BY created_at DESC
-          LIMIT 50`,
-        [usuarioEmail],
-      );
-      docs = rows as Doc[];
+      docs = (await listarDocumentos(usuarioEmail)) as Doc[];
       registros = await listarRegistros(usuarioEmail);
     } catch {
       dbError =

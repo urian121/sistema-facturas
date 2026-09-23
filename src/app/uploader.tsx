@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState, type DragEvent as ReactDragEvent } from "react";
+import Analizando, { HazEscaneo } from "./analizando";
 import { TIPO_ARRASTRE_DOCUMENTO } from "./arrastrar-documento";
 import Chat from "./chat";
 import DatosForm from "./datos-form";
 import HistorialDocumentos from "./historial-documentos";
 import ListaRegistros from "./lista-registros";
+import Notificaciones from "./notificaciones";
 import { notificar } from "./notificar";
 import OficinaVistaPrevia from "./oficina-vista-previa";
 import Papelera, { type DocPapelera } from "./papelera";
@@ -35,6 +37,8 @@ export type Doc = {
   created_at: string;
   doc_type: string | null;
   extraction: Extraccion | null;
+  /** Email del dueño si es un documento que le compartieron a este usuario (solo lectura). */
+  compartido_por?: string | null;
 };
 
 function formatSize(bytes: number) {
@@ -228,6 +232,12 @@ export default function Uploader({
     setPanelMovil("documento");
   }, []);
 
+  /** Tras aceptar una invitación: el documento compartido pasa a estar en el historial. */
+  const refrescarDocs = useCallback(async () => {
+    const res = await fetch("/api/documents");
+    if (res.ok) setDocs(await res.json());
+  }, []);
+
   const irAlInicio = useCallback(() => {
     setSelectedId(null);
     setVista("revisar");
@@ -329,6 +339,21 @@ export default function Uploader({
     }
   }, []);
 
+  const vaciarPapelera = useCallback(async () => {
+    try {
+      const res = await fetch("/api/documents/papelera", { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "No se pudo vaciar la papelera");
+      setPapeleraDocs([]);
+      const n: number = data.eliminados;
+      notificar.ok(
+        `Papelera vaciada · ${n} ${n === 1 ? "documento eliminado" : "documentos eliminados"} para siempre`,
+      );
+    } catch (err) {
+      notificar.error(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }, []);
+
   const alPasarDocumentoPorEncima = useCallback((e: ReactDragEvent<HTMLElement>) => {
     if (!e.dataTransfer.types.includes(TIPO_ARRASTRE_DOCUMENTO)) return;
     e.preventDefault();
@@ -376,11 +401,12 @@ export default function Uploader({
     <div className="flex h-dvh flex-col overflow-hidden">
       {/* A todo el ancho, por encima del riel: por eso vive fuera de la fila de abajo. */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-sunken px-4">
-        <Tooltip etiqueta="Aplicaciones" posicion="right">
+        {/* Mismo destino que "Inicio" del riel: sin documento abierto, en la vista de revisar. */}
+        <Tooltip etiqueta="Ir al inicio" posicion="right">
           <button
             type="button"
-            onClick={() => notificar.ok("El selector de aplicaciones llega pronto")}
-            aria-label="Aplicaciones"
+            onClick={irAlInicio}
+            aria-label="Ir al inicio"
             className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft transition hover:bg-surface hover:text-ink"
           >
             <IconoAplicaciones className="h-4 w-4" />
@@ -417,6 +443,8 @@ export default function Uploader({
               </button>
             </Tooltip>
           )}
+
+          <Notificaciones onAceptada={refrescarDocs} onAbrir={abrirDocumento} />
 
           <Tooltip etiqueta={usuario?.name ?? usuario?.email ?? "Perfil"} posicion="left">
             <div
@@ -475,6 +503,7 @@ export default function Uploader({
             cargando={papeleraCargando}
             onRestaurar={restaurar}
             onEliminarDefinitivo={eliminarDefinitivo}
+            onVaciar={vaciarPapelera}
           />
         </div>
       ) : (
@@ -504,6 +533,14 @@ export default function Uploader({
                     <span className="cifra shrink-0 text-label">
                       {formatSize(Number(selected.size_bytes))}
                     </span>
+                    {selected.compartido_por && (
+                      <span
+                        className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent-strong"
+                        title={`Compartido por ${selected.compartido_por} · solo lectura`}
+                      >
+                        Compartido · solo lectura
+                      </span>
+                    )}
                     {confirmado && (
                       <span className="ml-auto flex shrink-0 items-center gap-1 text-ok">
                         <IconoConforme className="h-3.5 w-3.5" />
@@ -541,12 +578,21 @@ export default function Uploader({
                     )}
                   </div>
 
-                  {!selected.extraction && (
+                  {/* El mismo haz del panel de análisis, barriendo el documento real
+                      (debajo de la barra de título, que mide h-11). */}
+                  {analyzing && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 top-11 overflow-hidden bg-accent-soft/20">
+                      <HazEscaneo />
+                    </div>
+                  )}
+
+                  {/* Analizar escribe el borrador del dueño: no se ofrece en uno compartido. */}
+                  {!selected.extraction && !selected.compartido_por && (
                     <div className="absolute bottom-4 right-4 z-10">
                       <button
                         onClick={() => analyze(selected.id)}
                         disabled={analyzing}
-                        className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-normal text-on-accent shadow-[0_8px_24px_-8px_rgba(36,36,36,0.45)] transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex cursor-pointer items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[13px] font-normal text-on-accent shadow-[0_8px_24px_-8px_rgba(36,36,36,0.45)] transition hover:bg-accent-strong hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <IconoDestello className="h-3.5 w-3.5" />
                         {analyzing ? "Analizando…" : "Analizar documento"}
@@ -592,12 +638,7 @@ export default function Uploader({
                 )
               ) : !selected.extraction ? (
                 analyzing ? (
-                  <div className="flex flex-1 items-center justify-center px-8 text-center">
-                    <p className="max-w-xs text-[13px] leading-relaxed text-ink-soft">
-                      Leyendo el documento, clasificándolo y transcribiendo su texto. Tarda
-                      entre 10 y 20 segundos.
-                    </p>
-                  </div>
+                  <Analizando filename={selected.filename} />
                 ) : (
                   <HistorialDocumentos
                     docs={docs}
@@ -615,9 +656,9 @@ export default function Uploader({
                     <button
                       onClick={() => analyze(selected.id)}
                       disabled={analyzing}
-                      className="ml-auto flex cursor-pointer items-center gap-1.5 text-[13px] text-label transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                      className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-1 text-[13px] text-ink-soft transition hover:border-line-strong hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:bg-surface"
                     >
-                      <IconoRecargar className="h-3.5 w-3.5" />
+                      <IconoRecargar className={`h-3.5 w-3.5 ${analyzing ? "animate-spin" : ""}`} />
                       {analyzing ? "Analizando…" : "Volver a analizar"}
                     </button>
                   </div>

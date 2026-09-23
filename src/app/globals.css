@@ -163,18 +163,27 @@ body {
   background-clip: content-box;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent-strong);
-  outline-offset: 2px;
-  border-radius: 4px;
+/* En `@layer base` por lo mismo que los controles de abajo: suelta, pisaba
+   el `focus-visible:outline-none` de los inputs que dibujan su propio foco. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
-input,
-textarea,
-select,
-button {
-  caret-color: var(--accent-strong);
-  font: inherit;
+/* En `@layer base` y no suelto: una regla sin capa le gana a cualquier
+   utilidad de Tailwind, así que `font: inherit` pisaba los `text-[..]` y
+   `font-*` puestos en cada botón (el menú "⋮" salía a 16px heredados). */
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    caret-color: var(--accent-strong);
+    font: inherit;
+  }
 }
 
 /* Toda cifra de dinero se alinea por columna, siempre. */
@@ -183,7 +192,8 @@ button {
   font-feature-settings: "tnum" 1;
 }
 
-/* El único momento de movimiento autorizado: los datos llegando tras el análisis. */
+/* Movimiento autorizado: los datos llegando tras el análisis (`entra`) y,
+   mientras se analiza, el escaneo (`escaneo`, `detecta`). Nada más se mueve. */
 @keyframes entra {
   from {
     opacity: 0;
@@ -199,8 +209,44 @@ button {
   animation: entra 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Haz del escáner: baja y sube por el documento mientras se analiza. */
+@keyframes escaneo {
+  from {
+    top: 0%;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+.escaneo {
+  animation: escaneo 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+
+/* Líneas del documento que se "reconocen" a medida que pasa el haz. */
+@keyframes detecta {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.detecta {
+  animation: detecta 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .entra {
+  .entra,
+  .detecta {
     animation: none;
+  }
+
+  /* Sin barrido: el haz se queda quieto en el medio, como indicador. */
+  .escaneo {
+    animation: none;
+    top: 50%;
   }
 }

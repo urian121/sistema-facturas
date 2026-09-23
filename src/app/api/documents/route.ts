@@ -1,25 +1,19 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { listarDocumentos } from "@/lib/documentos";
 import { emailUsuarioActual } from "@/lib/usuario-actual";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Historial activo del usuario; lo usa el cliente para refrescarse tras restaurar de la papelera. */
+/**
+ * Historial activo del usuario (propios + compartidos aceptados); lo usa el
+ * cliente para refrescarse tras restaurar de la papelera o aceptar una invitación.
+ */
 export async function GET() {
   const usuarioEmail = await emailUsuarioActual();
   if (!usuarioEmail) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  const { rows } = await pool.query(
-    `SELECT id, filename, mime_type, size_bytes, created_at, doc_type, extraction
-       FROM documents
-      WHERE usuario_email = $1
-        AND eliminado_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT 50`,
-    [usuarioEmail],
-  );
-  return NextResponse.json(rows);
+  return NextResponse.json(await listarDocumentos(usuarioEmail));
 }

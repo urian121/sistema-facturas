@@ -66,7 +66,9 @@ function alTeclear(e: KeyboardEvent, onElegir: () => void) {
 }
 
 function estado(doc: Doc): string {
-  return `${doc.doc_type ? etiquetaTipo(doc.doc_type) : "Sin analizar"} · ${formatoFecha.format(new Date(doc.created_at))}`;
+  const fecha = formatoFecha.format(new Date(doc.created_at));
+  if (doc.compartido_por) return `Compartido por ${doc.compartido_por.split("@")[0]} · ${fecha}`;
+  return `${doc.doc_type ? etiquetaTipo(doc.doc_type) : "Sin analizar"} · ${fecha}`;
 }
 
 /**
@@ -247,10 +249,24 @@ export default function HistorialDocumentos({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Fijo: no se desplaza con la lista de abajo. */}
       <div className="shrink-0 border-b border-line p-4 pb-3">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-label">Historial</p>
+        {/* Una sola fila: título, buscador en el medio y vistas a la derecha. */}
+        <div className="flex items-center gap-3">
+          <p className="shrink-0 text-[11px] font-medium uppercase tracking-[0.06em] text-label">
+            Historial
+          </p>
 
-          <div className="flex items-center gap-0.5 rounded-full border border-line p-0.5">
+          <div className="relative mx-auto min-w-0 max-w-md flex-1">
+            <IconoBuscar className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-label" />
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre de archivo…"
+              aria-label="Buscar en el historial"
+              className="w-full rounded-full border border-line bg-surface py-1.5 pl-8 pr-3 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-accent-strong/35 focus-visible:outline-none"
+            />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-line p-0.5">
             {(
               [
                 ["lista", "Vista de lista", IconoLista, "left"],
@@ -275,17 +291,6 @@ export default function HistorialDocumentos({
               </Tooltip>
             ))}
           </div>
-        </div>
-
-        <div className="relative">
-          <IconoBuscar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-label" />
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre de archivo…"
-            aria-label="Buscar en el historial"
-            className="w-full rounded-md border border-line bg-surface py-1.5 pl-8 pr-2.5 text-[13px] outline-none transition placeholder:text-label hover:border-line-strong focus:border-line-strong focus-visible:outline-none"
-          />
         </div>
       </div>
 

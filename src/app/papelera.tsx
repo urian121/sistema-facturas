@@ -86,15 +86,21 @@ export default function Papelera({
   cargando,
   onRestaurar,
   onEliminarDefinitivo,
+  onVaciar,
 }: {
   docs: DocPapelera[];
   cargando: boolean;
   onRestaurar: (id: string) => void;
   onEliminarDefinitivo: (id: string) => void;
+  onVaciar: () => void;
 }) {
+  const [confirmandoVaciar, setConfirmandoVaciar] = useState(false);
+
   if (cargando) {
     return (
-      <div className="flex flex-1 items-center justify-center">
+      // `h-full` y no `flex-1`: el padre es un bloque con scroll, no un flex,
+      // así que `flex-1` no le daba altura y el texto quedaba arriba.
+      <div className="flex h-full items-center justify-center">
         <p className="text-[13px] text-label">Cargando…</p>
       </div>
     );
@@ -115,12 +121,38 @@ export default function Papelera({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
-      <div className="mb-3 flex items-baseline gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <h2 className="text-[15px] font-medium">Papelera</h2>
         <span className="cifra text-[13px] text-label">
           {docs.length} {docs.length === 1 ? "documento" : "documentos"}
         </span>
+        <button
+          type="button"
+          onClick={() => setConfirmandoVaciar(true)}
+          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium text-danger transition hover:bg-danger-soft"
+        >
+          <IconoPapelera className="h-3.5 w-3.5" />
+          Vaciar papelera
+        </button>
       </div>
+
+      {confirmandoVaciar && (
+        <ConfirmarModal
+          titulo="Vaciar papelera"
+          descripcion={
+            docs.length === 1
+              ? `"${docs[0].filename}" se borrará para siempre, junto con sus datos archivados. Esta acción no se puede deshacer.`
+              : `Los ${docs.length} documentos de la papelera se borrarán para siempre, junto con sus datos archivados. Esta acción no se puede deshacer.`
+          }
+          etiquetaConfirmar="Vaciar papelera"
+          peligro
+          onConfirmar={() => {
+            setConfirmandoVaciar(false);
+            onVaciar();
+          }}
+          onCancelar={() => setConfirmandoVaciar(false)}
+        />
+      )}
 
       <div className="flex flex-col gap-1.5">
         {docs.map((doc) => (

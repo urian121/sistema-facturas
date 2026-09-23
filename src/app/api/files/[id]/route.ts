@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { puedeVer } from "@/lib/compartir";
 import { pool } from "@/lib/db";
 import { emailUsuarioActual } from "@/lib/usuario-actual";
 
@@ -16,7 +17,7 @@ export async function GET(
   const { id } = await params;
 
   const { rows } = await pool.query(
-    `SELECT filename, mime_type, data FROM documents WHERE id = $1 AND usuario_email = $2`,
+    `SELECT filename, mime_type, data FROM documents WHERE id = $1 AND ${puedeVer(2)}`,
     [id, usuarioEmail],
   );
   if (rows.length === 0) {
